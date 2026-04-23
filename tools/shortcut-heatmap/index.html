@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Figma Shortcut Heatmap</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Figma Flow Tools / Shortcut Heatmap</p>
+          <h1>把快捷键变成一张可导出的热区图</h1>
+          <p class="hero-copy">按高频程度排序 Figma 快捷键，并映射到键盘区域。适合学习、团队培训、输出 PNG 到文档或小红书笔记。</p>
+        </div>
+        <div class="hero-card">
+          <span class="hero-number" id="shortcutCount">0</span>
+          <span class="hero-label">Shortcuts mapped</span>
+        </div>
+      </section>
+
+      <section class="toolbar" aria-label="筛选和导出">
+        <div class="control-group">
+          <label for="platform">平台</label>
+          <select id="platform">
+            <option value="mac">macOS</option>
+            <option value="win">Windows</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="category">场景</label>
+          <select id="category"></select>
+        </div>
+        <div class="control-group search-control">
+          <label for="search">搜索</label>
+          <input id="search" type="search" placeholder="命令、标签、快捷键">
+        </div>
+        <button class="secondary-button" id="exportSvgButton" type="button">导出 SVG</button>
+        <button class="primary-button" id="exportPngButton" type="button">导出 PNG</button>
+      </section>
+
+      <section class="export-board" id="exportBoard">
+        <div class="board-header">
+          <div>
+            <p class="eyebrow">Ranked by workflow value</p>
+            <h2>Figma 快捷键热区</h2>
+          </div>
+          <div class="legend">
+            <span><i class="legend-hot"></i>高频核心</span>
+            <span><i class="legend-warm"></i>常用增强</span>
+            <span><i class="legend-cool"></i>低频专项</span>
+          </div>
+        </div>
+
+        <div class="keyboard-wrap">
+          <div class="keyboard" id="keyboard" aria-label="快捷键键盘热区"></div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <aside class="insight-panel">
+          <h2>排序逻辑</h2>
+          <p>当前分数综合了频率、影响力和学习难度。越靠前越值得优先记忆，越亮的按键代表该键承载的高价值命令越多。</p>
+          <div class="metric-row">
+            <span>最高热区</span>
+            <strong id="topKey">-</strong>
+          </div>
+          <div class="metric-row">
+            <span>当前筛选</span>
+            <strong id="activeCount">0</strong>
+          </div>
+          <p class="source-note">说明：第一版是可维护数据集，适合先跑通产品形态。完整快捷键后续可以继续从 Figma App 内快捷键面板校对补齐。</p>
+        </aside>
+
+        <section class="shortcut-list" aria-label="快捷键排序列表">
+          <div class="list-header">
+            <h2>快捷键排序</h2>
+            <span id="listMeta"></span>
+          </div>
+          <div id="shortcutList"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./data/shortcuts.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>
