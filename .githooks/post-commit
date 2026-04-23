@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${SKIP_AUTO_PUSH:-0}" = "1" ]; then
+  echo "post-commit: auto push skipped by SKIP_AUTO_PUSH=1"
+  exit 0
+fi
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "post-commit: not inside a git repository"
+  exit 0
+fi
+
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+if [ -z "$branch" ]; then
+  echo "post-commit: detached HEAD, skip auto push"
+  exit 0
+fi
+
+if ! git remote get-url origin >/dev/null 2>&1; then
+  echo "post-commit: remote 'origin' not found, skip auto push"
+  exit 0
+fi
+
+if git rev-parse --abbrev-ref "@{upstream}" >/dev/null 2>&1; then
+  echo "post-commit: pushing current branch to upstream"
+  git push
+  exit 0
+fi
+
+echo "post-commit: no upstream for '$branch', pushing to origin and setting upstream"
+git push --set-upstream origin "$branch"

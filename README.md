@@ -48,3 +48,20 @@ http://localhost:5173
 ## 数据说明
 
 第一版数据放在 `tools/shortcut-heatmap/data/shortcuts.js`。Figma 官方建议在 App 内通过快捷键面板查看完整快捷键，不同平台和键盘布局可能存在差异；因此这里先采用可维护的结构，方便后续补全、校对、导入或接入官方/团队自定义数据。
+
+## Git Hook
+
+仓库内置了一个 `post-commit` hook，提交成功后会自动推送到远程 `origin`。
+
+启用方式：
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/post-commit
+```
+
+临时跳过自动推送：
+
+```bash
+SKIP_AUTO_PUSH=1 git commit -m "your message"
+```
