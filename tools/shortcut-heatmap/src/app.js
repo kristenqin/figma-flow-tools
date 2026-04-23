@@ -90,7 +90,9 @@ const keyboardRows = [
 const state = {
   platform: "mac",
   category: "all",
-  search: ""
+  search: "",
+  hoveredShortcutId: null,
+  lockedShortcutId: null
 };
 
 const elements = {
@@ -105,7 +107,10 @@ const elements = {
   shortcutCount: document.querySelector("#shortcutCount"),
   exportBoard: document.querySelector("#exportBoard"),
   exportPngButton: document.querySelector("#exportPngButton"),
-  exportSvgButton: document.querySelector("#exportSvgButton")
+  exportSvgButton: document.querySelector("#exportSvgButton"),
+  focusTitle: document.querySelector("#focusTitle"),
+  focusDescription: document.querySelector("#focusDescription"),
+  clearFocusButton: document.querySelector("#clearFocusButton")
 };
 
 function init() {
@@ -129,6 +134,12 @@ function init() {
 
   elements.search.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
+    render();
+  });
+
+  elements.clearFocusButton.addEventListener("click", () => {
+    state.lockedShortcutId = null;
+    state.hoveredShortcutId = null;
     render();
   });
 
@@ -179,19 +190,24 @@ function buildKeyStats(activeShortcuts) {
 function render() {
   const activeShortcuts = getFilteredShortcuts();
   const keyStats = buildKeyStats(activeShortcuts);
-  renderKeyboard(keyStats);
-  renderList(activeShortcuts);
+  const focusedShortcut = getFocusedShortcut(activeShortcuts);
+  renderKeyboard(keyStats, focusedShortcut);
+  renderList(activeShortcuts, focusedShortcut);
   renderMetrics(activeShortcuts, keyStats);
+  renderFocusStrip(focusedShortcut);
 }
 
-function renderKeyboard(keyStats) {
+function renderKeyboard(keyStats, focusedShortcut) {
   elements.keyboard.innerHTML = "";
+  const focusState = getFocusState(focusedShortcut);
+  elements.keyboard.classList.toggle("is-focus-mode", Boolean(focusState));
 
   keyboardRows.flat().forEach(([id, label, widthClass]) => {
     const key = document.createElement("article");
     const stats = keyStats[normalizeKey(id)];
     const heatClass = getHeatClass(stats?.score || 0);
-    key.className = ["key", widthClass, heatClass, stats ? "" : "empty"].filter(Boolean).join(" ");
+    const focusClass = getFocusClass(id, focusState);
+    key.className = ["key", widthClass, heatClass, focusClass, stats ? "" : "empty"].filter(Boolean).join(" ");
 
     const labelNode = document.createElement("span");
     labelNode.className = "key-label";
@@ -210,13 +226,16 @@ function renderKeyboard(keyStats) {
   });
 }
 
-function renderList(activeShortcuts) {
+function renderList(activeShortcuts, focusedShortcut) {
   elements.list.innerHTML = "";
   elements.listMeta.textContent = `${activeShortcuts.length} items`;
 
   activeShortcuts.forEach((shortcut, index) => {
     const card = document.createElement("article");
-    card.className = "shortcut-card";
+    const isFocused = focusedShortcut?.id === shortcut.id;
+    const isLocked = state.lockedShortcutId === shortcut.id;
+    card.className = ["shortcut-card", isFocused ? "is-focused" : "", isLocked ? "is-locked" : ""].filter(Boolean).join(" ");
+    card.tabIndex = 0;
 
     const rank = document.createElement("span");
     rank.className = "rank";
@@ -237,6 +256,32 @@ function renderList(activeShortcuts) {
       combo.append(keyNode);
     });
 
+    card.addEventListener("mouseenter", () => {
+      state.hoveredShortcutId = shortcut.id;
+      render();
+    });
+
+    card.addEventListener("mouseleave", () => {
+      state.hoveredShortcutId = null;
+      render();
+    });
+
+    card.addEventListener("focus", () => {
+      state.hoveredShortcutId = shortcut.id;
+      render();
+    });
+
+    card.addEventListener("blur", () => {
+      state.hoveredShortcutId = null;
+      render();
+    });
+
+    card.addEventListener("click", () => {
+      state.lockedShortcutId = state.lockedShortcutId === shortcut.id ? null : shortcut.id;
+      state.hoveredShortcutId = shortcut.id;
+      render();
+    });
+
     card.append(rank, body, combo);
     elements.list.append(card);
   });
@@ -248,11 +293,72 @@ function renderMetrics(activeShortcuts, keyStats) {
   elements.topKey.textContent = top ? `${top[0].toUpperCase()} / ${top[1].score}` : "-";
 }
 
+function renderFocusStrip(focusedShortcut) {
+  if (!focusedShortcut) {
+    elements.focusTitle.textContent = "默认热区";
+    elements.focusDescription.textContent = "悬停或点击下方快捷键，热区会同时点亮主键和修饰键，帮助用户更快理解完整组合键。";
+    elements.clearFocusButton.hidden = true;
+    return;
+  }
+
+  const combo = focusedShortcut[state.platform].map(formatComboKey).join(" + ");
+  const isLocked = state.lockedShortcutId === focusedShortcut.id;
+  elements.focusTitle.textContent = `${focusedShortcut.command} / ${combo}`;
+  elements.focusDescription.textContent = isLocked
+    ? "当前为锁定模式，导出 PNG 或 SVG 时会保留这组主键与修饰键高亮。"
+    : "当前为临时预览模式，移开鼠标后会恢复默认热区。点击卡片可锁定高亮。";
+  elements.clearFocusButton.hidden = !isLocked;
+}
+
 function getHeatClass(score) {
   if (score >= 170) return "hot";
   if (score >= 90) return "warm";
   if (score > 0) return "cool";
   return "";
+}
+
+function getFocusedShortcut(activeShortcuts) {
+  const focusedId = state.lockedShortcutId || state.hoveredShortcutId;
+  return activeShortcuts.find((shortcut) => shortcut.id === focusedId) || null;
+}
+
+function getFocusState(shortcut) {
+  if (!shortcut) return null;
+  const combo = shortcut[state.platform].map(normalizeKey);
+  return {
+    modifierKeys: combo.filter(isModifierKey),
+    primaryKeys: combo.filter((key) => !isModifierKey(key))
+  };
+}
+
+function getFocusClass(keyId, focusState) {
+  if (!focusState) return "";
+  const normalizedKey = normalizeKey(keyId);
+  if (focusState.primaryKeys.includes(normalizedKey)) return "focus-primary";
+
+  const modifierAliases = getModifierAliases(normalizedKey);
+  if (modifierAliases.some((alias) => focusState.modifierKeys.includes(alias))) {
+    return "focus-modifier";
+  }
+
+  return "";
+}
+
+function isModifierKey(key) {
+  return ["command", "control", "option", "shift"].includes(key);
+}
+
+function getModifierAliases(key) {
+  const aliases = {
+    command: ["command", "control"],
+    "command-r": ["command", "control"],
+    control: ["control"],
+    option: ["option"],
+    "option-r": ["option"],
+    shift: ["shift"],
+    "shift-r": ["shift"]
+  };
+  return aliases[key] || [key];
 }
 
 function normalizeKey(key) {
@@ -263,7 +369,11 @@ function normalizeKey(key) {
     control: "control",
     ctrl: "control",
     option: "option",
-    alt: "option"
+    alt: "option",
+    delete: "delete",
+    enter: "enter",
+    esc: "esc",
+    space: "space"
   };
   return map[key.toLowerCase()] || key.toLowerCase();
 }
