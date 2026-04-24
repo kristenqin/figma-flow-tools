@@ -33,6 +33,17 @@
 - Sizing：Hug / Fill / Fixed
 - Wrap / Absolute Position：特殊布局行为
 
+### Token Lab
+
+从一批界面图片中提取颜色、间距、圆角等视觉规律，整理为可导入 Figma Variables 的 token 草案。
+
+当前阶段定位：
+
+- 批量图片分析
+- token 聚类与归并
+- 命名与语义映射建议
+- 导入 Figma local variables
+
 ## 项目方向
 
 这个仓库可以逐步沉淀为「Figma workflow optimizer」：
@@ -41,6 +52,7 @@
 - 命名规范检查器
 - 图层/组件整理 checklist
 - Token/样式命名转换器
+- 图片到 Variables 的 token 生产工具
 - 设计交付检查清单生成器
 - Figma 文档结构模板生成器
 - 批量文案占位/替换工具
