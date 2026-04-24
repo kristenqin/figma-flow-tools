@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Property Lab / Auto Layout</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <main class="workbench-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Figma Flow Tools / Property Lab</p>
+          <h1>Auto Layout Workbench</h1>
+        </div>
+        <div class="topbar-meta">
+          <span class="meta-chip">Three-Panel Workspace</span>
+          <span class="meta-chip">Focused Lesson: <strong id="topFocusTitle">Direction</strong></span>
+        </div>
+      </header>
+
+      <section class="workbench">
+        <aside class="panel column-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Properties</p>
+              <h2>属性面板</h2>
+            </div>
+            <p class="panel-copy">像 Figma 一样在这里调参，左栏独立滚动，不打断中间预览。</p>
+          </div>
+
+          <div class="panel-scroll">
+            <section class="group-block" data-group-block="auto-layout">
+              <button class="group-header group-toggle" type="button" data-group-toggle="auto-layout" aria-expanded="true">
+                <p class="group-title">Auto Layout</p>
+                <span class="group-note">Direction / Gap / Padding / Alignment / Sizing / Wrap</span>
+              </button>
+              <div id="groupAutoLayout" class="control-group"></div>
+            </section>
+
+            <section class="group-block" data-group-block="layout-context">
+              <button class="group-header group-toggle" type="button" data-group-toggle="layout-context" aria-expanded="true">
+                <p class="group-title">Layout Context</p>
+                <span class="group-note">Parent Width / Constraints / Absolute / Clip</span>
+              </button>
+              <div id="groupLayoutContext" class="control-group"></div>
+            </section>
+
+            <section class="group-block" data-group-block="size-constraint">
+              <button class="group-header group-toggle" type="button" data-group-toggle="size-constraint" aria-expanded="true">
+                <p class="group-title">Size Constraints</p>
+                <span class="group-note">Min / Max Width & Height</span>
+              </button>
+              <div id="groupSizeConstraint" class="control-group"></div>
+            </section>
+          </div>
+        </aside>
+
+        <section class="panel canvas-column">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Canvas</p>
+              <h2 id="activeLessonTitle">Direction</h2>
+              <p id="activeLessonSummary" class="panel-copy"></p>
+            </div>
+          </div>
+
+          <div class="canvas-scroll">
+            <div class="canvas-status">
+              <div class="status-cluster">
+                <span id="axisHint" class="status-pill">Main axis -></span>
+                <span id="frameMeasure" class="status-pill">Frame hugs content width</span>
+              </div>
+              <div class="state-chips" id="stateChips" aria-label="当前参数状态"></div>
+            </div>
+
+            <div class="preview-stage">
+              <div class="stage-grid"></div>
+              <div class="parent-shell" id="parentShell">
+                <div class="parent-caption">
+                  <span>Parent Container</span>
+                  <strong id="parentStatus">520px / Constraint Left</strong>
+                </div>
+                <div class="frame-shell" id="demoFrameShell">
+                  <div class="frame-caption">
+                    <span>Auto Layout Frame</span>
+                    <strong id="layoutStatus">Horizontal / Hug / No Wrap</strong>
+                  </div>
+                  <div class="demo-frame" id="demoFrame" aria-label="Auto Layout 实时预览"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="narrative-strip">
+              <p class="strip-label">Current Behavior</p>
+              <p id="activeNarrative" class="strip-copy"></p>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel inspector-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Inspector</p>
+              <h2 id="inspectorTitle">Direction</h2>
+            </div>
+            <p class="panel-copy">右侧只跟随当前焦点属性，避免整页信息堆积。</p>
+          </div>
+
+          <div class="panel-scroll inspector-scroll">
+            <section class="inspector-section">
+              <p class="card-label">What It Controls</p>
+              <p id="whatItControls" class="card-copy"></p>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">Visual Effect</p>
+              <p id="visualEffect" class="card-copy"></p>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">When To Use</p>
+              <ul id="whenToUse" class="tag-list"></ul>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">Common Mistakes</p>
+              <ul id="commonMistakes" class="mistake-list"></ul>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">Related Lessons</p>
+              <ul id="relatedLessons" class="tag-list"></ul>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">Common Confusions</p>
+              <ul id="commonConfusions" class="mistake-list"></ul>
+            </section>
+
+            <section class="inspector-section">
+              <p class="card-label">CSS Mapping</p>
+              <ul id="cssMapping" class="mapping-tags"></ul>
+            </section>
+
+            <section class="inspector-section code-section">
+              <p class="card-label">CSS Snapshot</p>
+              <pre class="code-block"><code id="cssSnapshot"></code></pre>
+            </section>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./data/autolayout-lessons.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

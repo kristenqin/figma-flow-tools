@@ -48,3 +48,40 @@
 - Effect / Stroke / Radius 可视化解释
 - Component Properties 教学模式
 - Variables / Tokens 映射模式
+
+## 属性扩展策略
+
+不是所有 Figma 属性都应该直接塞进同一个页面。
+
+更合理的方式是：
+
+- 先建立一个统一入口：`Property Lab`
+- 再根据属性特性分成不同演示模式
+- 当某一类属性足够多时，再拆成独立子实验室
+
+### 适合优先做的属性特征
+
+- 调整后画面结果明显变化
+- 容易和其他属性混淆
+- 在真实工作中高频
+- 新手理解成本高
+
+### 第一批扩展优先级
+
+1. `Constraints`
+2. `Min Width / Max Width`
+3. `Min Height / Max Height`
+4. `Clip Content`
+5. `Corner Radius`
+6. `Stroke Align`
+7. `Opacity`
+8. `Text resizing`
+9. `Line Height`
+10. `Letter Spacing`
+
+### 后续方向建议
+
+- 当前页面继续扩展布局与尺寸类属性
+- 样式类属性逐步沉淀为 `Style Lab`
+- 组件类属性逐步沉淀为 `Component Lab`
+- 原型与滚动类属性逐步沉淀为 `Prototype Lab`
