@@ -1,0 +1,12 @@
+{
+  "name": "Token Lab Snapshot",
+  "id": "token-lab-snapshot-dev",
+  "api": "1.0.0",
+  "editorType": ["figma"],
+  "main": "code.js",
+  "ui": "ui.html",
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

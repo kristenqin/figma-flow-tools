@@ -9,6 +9,7 @@
 - 展示 raw / cluster / normalized / semantic 四层数据
 - 提供 import preview 与冲突策略切换
 - 基于 `TokenLabDocument + currentFileSnapshot + strategy` 实时计算导入计划
+- 提供一版 Figma Plugin skeleton，真实读取当前文件 variables 快照
 
 ## 本地运行
 
