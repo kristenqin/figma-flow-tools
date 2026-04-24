@@ -1,4 +1,5 @@
-const fixture = window.TOKEN_LAB_FIXTURES;
+const workspace = window.TOKEN_LAB_WORKSPACE;
+const planner = window.TokenLabImportPlanner;
 
 const views = [
   {
@@ -25,8 +26,8 @@ const views = [
 
 const state = {
   activeView: "normalized",
-  activeMode: fixture.batch.defaultMode,
-  selectedImageId: fixture.images[0]?.id || null,
+  activeMode: workspace.batch.defaultMode,
+  selectedImageId: workspace.analysis.images[0]?.id || null,
   selectedGroupId: "primitive-color",
   selectedItemId: "token-color-surface-0",
   strategy: "skip-existing"
@@ -69,13 +70,43 @@ function init() {
 function bindEvents() {
   elements.useSampleButton.addEventListener("click", () => {
     state.activeView = "normalized";
-    state.activeMode = fixture.batch.defaultMode;
-    state.selectedImageId = fixture.images[0]?.id || null;
+    state.activeMode = workspace.batch.defaultMode;
+    state.selectedImageId = workspace.analysis.images[0]?.id || null;
     state.selectedGroupId = "primitive-color";
     state.selectedItemId = "token-color-surface-0";
     state.strategy = "skip-existing";
     render();
   });
+}
+
+function getImportPlan() {
+  return planner.buildImportPlan(workspace.document, workspace.currentFileSnapshot, state.strategy);
+}
+
+function getFlattenedDocument() {
+  return planner.flattenDocument(workspace.document);
+}
+
+function getSemanticSuggestionGroups() {
+  return workspace.document.collections
+    .filter((collection) => collection.id === "semantics")
+    .flatMap((collection) =>
+      collection.groups.map((group) => ({
+        id: `${group.id}-suggestions`,
+        name: group.name.replace("Semantic / ", "") + " Suggestions",
+        eyebrow: `${group.tokens.length} alias proposals`,
+        summary: "从 normalized semantic tokens 派生的导入建议。",
+        items: group.tokens.map((token) => ({
+          id: token.id,
+          label: token.name,
+          meta: token.aliasOf
+            ? `alias -> ${getFlattenedDocument().tokenMap.get(token.aliasOf.tokenId)?.name || token.aliasOf.tokenId}`
+            : "direct semantic token",
+          confidence: token.source?.confidence || 0,
+          swatch: token.valuesByMode?.light?.hex
+        }))
+      }))
+    );
 }
 
 function render() {
@@ -91,16 +122,17 @@ function render() {
 }
 
 function renderBatch() {
-  elements.batchName.textContent = fixture.batch.name;
-  elements.consistencyScore.textContent = `Consistency ${fixture.batch.consistencyScore}`;
+  elements.batchName.textContent = workspace.batch.name;
+  elements.consistencyScore.textContent = `Consistency ${workspace.batch.consistencyScore}`;
   elements.batchSummary.innerHTML = "";
 
   const entries = [
-    ["Source", fixture.batch.sourceType],
-    ["Platform", fixture.batch.platform],
-    ["Area", fixture.batch.productArea],
-    ["Default Mode", fixture.batch.defaultMode],
-    ["Images", String(fixture.batch.imageCount)]
+    ["Source", workspace.batch.sourceType],
+    ["Platform", workspace.batch.platform],
+    ["Area", workspace.batch.productArea],
+    ["Default Mode", workspace.batch.defaultMode],
+    ["Images", String(workspace.batch.imageCount)],
+    ["Doc Version", workspace.document.version]
   ];
 
   entries.forEach(([label, value]) => {
@@ -113,10 +145,10 @@ function renderBatch() {
 }
 
 function renderImages() {
-  elements.imageCountBadge.textContent = `${fixture.images.length} images`;
+  elements.imageCountBadge.textContent = `${workspace.analysis.images.length} images`;
   elements.imageQueue.innerHTML = "";
 
-  fixture.images.forEach((image) => {
+  workspace.analysis.images.forEach((image) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "image-card";
@@ -148,23 +180,30 @@ function renderImages() {
 }
 
 function renderStages() {
+  const plan = getImportPlan();
   elements.stageRail.innerHTML = "";
 
-  fixture.stages.forEach((stage) => {
+  workspace.analysis.stages.forEach((stage) => {
     const article = document.createElement("article");
     article.className = "stage-card";
     article.dataset.status = stage.status;
+
+    const summary =
+      stage.id === "import"
+        ? `${plan.stats.createTokens} create / ${plan.stats.updateTokens} update / ${plan.stats.skipTokens} skip`
+        : stage.summary;
+
     article.innerHTML = `
       <p>${stage.label}</p>
       <strong>${stage.metric}</strong>
-      <span>${stage.summary}</span>
+      <span>${summary}</span>
     `;
     elements.stageRail.append(article);
   });
 }
 
 function renderModes() {
-  const modes = ["light", "dark"];
+  const modes = workspace.document.collections[0].modes.map((mode) => mode.id);
   elements.modeSwitch.innerHTML = "";
 
   modes.forEach((mode) => {
@@ -237,12 +276,15 @@ function renderGroups() {
 }
 
 function renderHeroMetrics(group) {
+  const plan = getImportPlan();
   const items = getItemsForGroup(group);
   const metrics = [
     `${items.length} items`,
     `Mode: ${formatLabel(state.activeMode)}`,
-    `Strategy: ${formatLabel(state.strategy)}`
+    `Strategy: ${formatLabel(state.strategy)}`,
+    `Validation: ${plan.stats.validationErrors} errors / ${plan.stats.validationWarnings} warnings`
   ];
+
   elements.heroMetrics.innerHTML = "";
   metrics.forEach((label) => {
     const chip = document.createElement("span");
@@ -302,6 +344,8 @@ function renderDetails() {
 }
 
 function renderTokenTable(group, tokens) {
+  const plan = getImportPlan();
+  const operationMap = new Map(plan.operations.filter((operation) => operation.tokenId).map((operation) => [operation.tokenId, operation]));
   const wrap = document.createElement("div");
   wrap.className = "token-table";
 
@@ -311,11 +355,12 @@ function renderTokenTable(group, tokens) {
     <span>Name</span>
     <span>Light</span>
     <span>Dark</span>
-    <span>Status</span>
+    <span>Plan</span>
   `;
   wrap.append(header);
 
   tokens.forEach((token) => {
+    const operation = operationMap.get(token.id);
     const row = document.createElement("button");
     row.type = "button";
     row.className = "token-row";
@@ -333,7 +378,7 @@ function renderTokenTable(group, tokens) {
       </span>
       <span>${formatTokenValue(token.valuesByMode.light)}</span>
       <span>${formatTokenValue(token.valuesByMode.dark)}</span>
-      <span><i class="status-dot" data-status="${token.status}"></i>${formatLabel(token.status)}</span>
+      <span><i class="status-dot" data-status="${token.status}"></i>${formatOperationLabel(operation)}</span>
     `;
     wrap.append(row);
   });
@@ -343,7 +388,8 @@ function renderTokenTable(group, tokens) {
 
 function renderInspector() {
   const item = getSelectedItem();
-  const image = fixture.images.find((entry) => entry.id === state.selectedImageId);
+  const image = workspace.analysis.images.find((entry) => entry.id === state.selectedImageId);
+  const plan = getImportPlan();
 
   if (!item) {
     elements.inspectorTitle.textContent = "Token Detail";
@@ -358,10 +404,10 @@ function renderInspector() {
   elements.inspectorTitle.textContent = state.activeView === "normalized" ? "Token Detail" : "Signal Detail";
   elements.inspectorTypeBadge.textContent = item.resolvedType || "OBS";
   elements.selectedName.textContent = item.name || item.label;
-  elements.selectedMeta.textContent = buildSelectedMeta(item, image);
+  elements.selectedMeta.textContent = buildSelectedMeta(item, image, plan);
 
   renderModeValues(item);
-  renderSourceSignals(item, image);
+  renderSourceSignals(item, image, plan);
 }
 
 function renderModeValues(item) {
@@ -387,7 +433,8 @@ function renderModeValues(item) {
   });
 }
 
-function renderSourceSignals(item, image) {
+function renderSourceSignals(item, image, plan) {
+  const operation = plan.operations.find((entry) => entry.tokenId === item.id);
   elements.sourceSignals.innerHTML = "";
   const lines = [];
 
@@ -403,8 +450,18 @@ function renderSourceSignals(item, image) {
   if (item.source?.rawCandidates?.length) {
     lines.push(`Candidates: ${item.source.rawCandidates.join(", ")}`);
   }
+  if (item.source?.notes?.length) {
+    lines.push(`Notes: ${item.source.notes.join("; ")}`);
+  }
   if (item.aliasOf) {
-    lines.push(`Alias: ${item.aliasOf.collectionId} -> ${item.aliasOf.tokenId}`);
+    const target = getFlattenedDocument().tokenMap.get(item.aliasOf.tokenId);
+    lines.push(`Alias: ${item.aliasOf.collectionId} -> ${target?.name || item.aliasOf.tokenId}`);
+  }
+  if (operation) {
+    lines.push(`Import plan: ${formatOperationLabel(operation)}`);
+    if (operation.originalName) {
+      lines.push(`Renamed from: ${operation.originalName}`);
+    }
   }
   if (!item.source && item.meta) {
     lines.push(item.meta);
@@ -442,21 +499,27 @@ function renderStrategySwitch() {
     button.addEventListener("click", () => {
       state.strategy = id;
       renderImportPreview();
+      renderStages();
       renderGroups();
+      renderDetails();
+      renderInspector();
     });
     elements.strategySwitch.append(button);
   });
 }
 
 function renderImportStats() {
-  const stats = fixture.importPreview.stats[state.strategy];
+  const plan = getImportPlan();
   elements.importStats.innerHTML = "";
 
   [
-    ["Create Collections", stats.createCollections],
-    ["Create Tokens", stats.createTokens],
-    ["Update Tokens", stats.updateTokens],
-    ["Skip Tokens", stats.skipTokens]
+    ["Create Collections", plan.stats.createCollections],
+    ["Reuse Collections", plan.stats.reuseCollections],
+    ["Create Tokens", plan.stats.createTokens],
+    ["Update Tokens", plan.stats.updateTokens],
+    ["Skip Tokens", plan.stats.skipTokens],
+    ["Alias Bindings", plan.stats.aliasBindings],
+    ["Validation Errors", plan.stats.validationErrors]
   ].forEach(([label, value]) => {
     const card = document.createElement("div");
     card.className = "stat-card";
@@ -466,9 +529,20 @@ function renderImportStats() {
 }
 
 function renderConflictList() {
+  const plan = getImportPlan();
   elements.conflictList.innerHTML = "";
 
-  fixture.importPreview.conflicts.forEach((conflict) => {
+  const messages = [
+    ...plan.conflicts,
+    ...plan.validationIssues.map((issue) => ({
+      tokenName: issue.code,
+      collection: "Validation",
+      issue: issue.message,
+      suggestion: issue.level === "error" ? "Resolve before import." : "Review before shipping."
+    }))
+  ];
+
+  messages.forEach((conflict) => {
     const card = document.createElement("article");
     card.className = "conflict-card";
     card.innerHTML = `
@@ -479,45 +553,58 @@ function renderConflictList() {
     `;
     elements.conflictList.append(card);
   });
+
+  if (!messages.length) {
+    elements.conflictList.innerHTML = `<article class="conflict-card"><strong>No blockers</strong><p>当前策略下没有命名冲突或校验错误。</p><span>Planner</span><small>可以继续实现真实 Figma 导入逻辑。</small></article>`;
+  }
 }
 
 function syncSelectionForView(viewId) {
   if (viewId === "raw") {
-    state.selectedGroupId = fixture.rawGroups[0].id;
-    state.selectedItemId = fixture.rawGroups[0].items[0].id;
+    state.selectedGroupId = workspace.analysis.rawGroups[0].id;
+    state.selectedItemId = workspace.analysis.rawGroups[0].items[0].id;
     return;
   }
 
   if (viewId === "clusters") {
-    state.selectedGroupId = fixture.clusterGroups[0].id;
-    state.selectedItemId = fixture.clusterGroups[0].items[0].id;
+    state.selectedGroupId = workspace.analysis.clusterGroups[0].id;
+    state.selectedItemId = workspace.analysis.clusterGroups[0].items[0].id;
     return;
   }
 
   if (viewId === "normalized") {
-    state.selectedGroupId = fixture.normalizedCollections[0].groups[0].id;
-    state.selectedItemId = fixture.normalizedCollections[0].groups[0].tokens[0].id;
+    state.selectedGroupId = workspace.document.collections[0].groups[0].id;
+    state.selectedItemId = workspace.document.collections[0].groups[0].tokens[0].id;
     return;
   }
 
-  state.selectedGroupId = fixture.semanticSuggestions[0].id;
-  state.selectedItemId = fixture.semanticSuggestions[0].items[0].id;
+  const semanticGroups = getSemanticSuggestionGroups();
+  state.selectedGroupId = semanticGroups[0].id;
+  state.selectedItemId = semanticGroups[0].items[0].id;
 }
 
 function getGroupsForActiveView() {
   if (state.activeView === "raw") {
-    return fixture.rawGroups;
+    return workspace.analysis.rawGroups;
   }
 
   if (state.activeView === "clusters") {
-    return fixture.clusterGroups;
+    return workspace.analysis.clusterGroups;
   }
 
   if (state.activeView === "normalized") {
-    return fixture.normalizedCollections.flatMap((collection) => collection.groups);
+    return workspace.document.collections.flatMap((collection) =>
+      collection.groups.map((group) => ({
+        ...group,
+        summary:
+          collection.name === "Primitives"
+            ? "基于 VARIABLE_SCHEMA 的真实 token 草案，可直接进入导入计划。"
+            : "语义 token 仍保留 alias 和人工确认信息。"
+      }))
+    );
   }
 
-  return fixture.semanticSuggestions;
+  return getSemanticSuggestionGroups();
 }
 
 function getSelectedGroup() {
@@ -552,14 +639,26 @@ function formatTokenValue(value) {
   return "—";
 }
 
-function buildSelectedMeta(item, image) {
+function formatOperationLabel(operation) {
+  if (!operation) return "Pending";
+  if (operation.kind === "create-token") return "Create";
+  if (operation.kind === "update-token") return "Update";
+  if (operation.kind === "skip-token") return "Skip";
+  return formatLabel(operation.kind);
+}
+
+function buildSelectedMeta(item, image, plan) {
   const parts = [];
+  const operation = plan.operations.find((entry) => entry.tokenId === item.id);
 
   if (item.description) {
     parts.push(item.description);
   }
   if (item.meta) {
     parts.push(item.meta);
+  }
+  if (operation) {
+    parts.push(`Planner: ${formatOperationLabel(operation)}`);
   }
   if (image) {
     parts.push(`Reference: ${image.frame} / ${formatLabel(image.mode)}`);
@@ -569,7 +668,7 @@ function buildSelectedMeta(item, image) {
 }
 
 function currentReviewCopy() {
-  return "在这里确认 token 命名、状态和导入前的 mode 差异。";
+  return "在这里确认 token 命名、状态、alias 和导入前的冲突策略。";
 }
 
 function formatLabel(value) {

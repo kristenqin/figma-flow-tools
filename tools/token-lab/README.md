@@ -8,6 +8,7 @@
 - 展示分析流水线
 - 展示 raw / cluster / normalized / semantic 四层数据
 - 提供 import preview 与冲突策略切换
+- 基于 `TokenLabDocument + currentFileSnapshot + strategy` 实时计算导入计划
 
 ## 本地运行
 
