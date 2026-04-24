@@ -18,6 +18,21 @@
 - 键盘热区展示：把主要快捷键映射到对应按键
 - 导出 PNG / SVG：用于文档、分享、培训材料
 
+### Property Lab
+
+把 Figma 属性面板里的关键参数拆成可视化实验台，直观解释每个属性值控制什么、变化后会产生什么效果。
+
+位置：`tools/property-lab`
+
+第一阶段聚焦 Auto Layout：
+
+- Direction：横向 / 纵向
+- Gap：子项间距变化
+- Padding：容器内边距变化
+- Alignment：内容对齐方式
+- Sizing：Hug / Fill / Fixed
+- Wrap / Absolute Position：特殊布局行为
+
 ## 项目方向
 
 这个仓库可以逐步沉淀为「Figma workflow optimizer」：
@@ -44,6 +59,8 @@ http://localhost:5173
 ```
 
 也可以直接双击打开 `tools/shortcut-heatmap/index.html`。
+
+`Property Lab` 后续也会采用同样的静态页面方式，方便快速预览和导出讲解图。
 
 ## 数据说明
 
