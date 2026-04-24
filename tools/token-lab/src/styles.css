@@ -529,6 +529,11 @@ h3 {
   text-align: left;
 }
 
+.editable-token-table .token-row-edit-head,
+.editable-token-table .token-row-edit {
+  grid-template-columns: minmax(220px, 1.7fr) 0.8fr 0.8fr minmax(180px, 1.2fr) 110px;
+}
+
 .token-row:last-child {
   border-bottom: 0;
 }
@@ -547,9 +552,70 @@ h3 {
   gap: 4px;
 }
 
+.editor-cell {
+  min-width: 0;
+}
+
 .token-name small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.token-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(22, 35, 40, 0.12);
+  border-radius: 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.88);
+  font-weight: 800;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(22, 35, 40, 0.12);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.review-chip.is-active {
+  color: #fffdf8;
+  border-color: rgba(15, 122, 92, 0.3);
+  background: linear-gradient(145deg, #128466, #0f7a5c);
+}
+
+.review-chip.is-danger {
+  color: #fffdf8;
+  border-color: rgba(214, 103, 80, 0.24);
+  background: linear-gradient(145deg, #e07a61, #d66750);
+}
+
+.plan-cell {
+  display: inline-flex;
+  align-items: center;
+}
+
+.token-row-edit[data-removed="true"] {
+  opacity: 0.58;
+}
+
+.token-row-edit[data-removed="true"] .token-input {
+  text-decoration: line-through;
+}
+
+.token-row-edit .plan-cell {
+  font-weight: 800;
 }
 
 .status-dot {

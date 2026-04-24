@@ -30,7 +30,9 @@ const state = {
   selectedImageId: workspace.analysis.images[0]?.id || null,
   selectedGroupId: "primitive-color",
   selectedItemId: "token-color-surface-0",
-  strategy: "skip-existing"
+  strategy: "skip-existing",
+  draftDocument: structuredClone(workspace.document),
+  removedTokenIds: new Set()
 };
 
 const elements = {
@@ -75,20 +77,78 @@ function bindEvents() {
     state.selectedGroupId = "primitive-color";
     state.selectedItemId = "token-color-surface-0";
     state.strategy = "skip-existing";
+    state.draftDocument = structuredClone(workspace.document);
+    state.removedTokenIds = new Set();
     render();
   });
 }
 
+function getVisibleDraftDocument() {
+  const documentDraft = structuredClone(state.draftDocument);
+  documentDraft.collections.forEach((collection) => {
+    collection.groups.forEach((group) => {
+      group.tokens = group.tokens.filter((token) => !state.removedTokenIds.has(token.id));
+    });
+  });
+  return documentDraft;
+}
+
+function getReviewDocument() {
+  return state.draftDocument;
+}
+
+function getReviewFlattenedDocument() {
+  return planner.flattenDocument(getReviewDocument());
+}
+
+function getPlanningDocument() {
+  const documentDraft = structuredClone(state.draftDocument);
+  documentDraft.collections.forEach((collection) => {
+    collection.groups.forEach((group) => {
+      group.tokens = group.tokens.filter((token) => !state.removedTokenIds.has(token.id));
+    });
+  });
+  return documentDraft;
+}
+
 function getImportPlan() {
-  return planner.buildImportPlan(workspace.document, workspace.currentFileSnapshot, state.strategy);
+  return planner.buildImportPlan(getPlanningDocument(), workspace.currentFileSnapshot, state.strategy);
 }
 
 function getFlattenedDocument() {
-  return planner.flattenDocument(workspace.document);
+  return planner.flattenDocument(getPlanningDocument());
+}
+
+function getTokenById(tokenId) {
+  return getReviewFlattenedDocument().tokenMap.get(tokenId) || null;
+}
+
+function updateToken(tokenId, updater) {
+  state.draftDocument.collections.forEach((collection) => {
+    collection.groups.forEach((group) => {
+      group.tokens.forEach((token) => {
+        if (token.id === tokenId) {
+          updater(token, collection, group);
+        }
+      });
+    });
+  });
+}
+
+function toggleTokenRemoved(tokenId) {
+  if (state.removedTokenIds.has(tokenId)) {
+    state.removedTokenIds.delete(tokenId);
+  } else {
+    state.removedTokenIds.add(tokenId);
+  }
+}
+
+function isSemanticToken(token) {
+  return token.collectionId === "semantics";
 }
 
 function getSemanticSuggestionGroups() {
-  return workspace.document.collections
+  return getReviewDocument().collections
     .filter((collection) => collection.id === "semantics")
     .flatMap((collection) =>
       collection.groups.map((group) => ({
@@ -99,8 +159,9 @@ function getSemanticSuggestionGroups() {
         items: group.tokens.map((token) => ({
           id: token.id,
           label: token.name,
+          removed: state.removedTokenIds.has(token.id),
           meta: token.aliasOf
-            ? `alias -> ${getFlattenedDocument().tokenMap.get(token.aliasOf.tokenId)?.name || token.aliasOf.tokenId}`
+            ? `alias -> ${getReviewFlattenedDocument().tokenMap.get(token.aliasOf.tokenId)?.name || token.aliasOf.tokenId}`
             : "direct semantic token",
           confidence: token.source?.confidence || 0,
           swatch: token.valuesByMode?.light?.hex
@@ -126,13 +187,21 @@ function renderBatch() {
   elements.consistencyScore.textContent = `Consistency ${workspace.batch.consistencyScore}`;
   elements.batchSummary.innerHTML = "";
 
+  const planningDocument = getPlanningDocument();
+  const visibleTokenCount = planningDocument.collections.reduce(
+    (count, collection) =>
+      count + collection.groups.reduce((groupCount, group) => groupCount + group.tokens.length, 0),
+    0
+  );
+
   const entries = [
     ["Source", workspace.batch.sourceType],
     ["Platform", workspace.batch.platform],
     ["Area", workspace.batch.productArea],
     ["Default Mode", workspace.batch.defaultMode],
     ["Images", String(workspace.batch.imageCount)],
-    ["Doc Version", workspace.document.version]
+    ["Doc Version", planningDocument.version],
+    ["Visible Tokens", String(visibleTokenCount)]
   ];
 
   entries.forEach(([label, value]) => {
@@ -203,7 +272,7 @@ function renderStages() {
 }
 
 function renderModes() {
-  const modes = workspace.document.collections[0].modes.map((mode) => mode.id);
+  const modes = getReviewDocument().collections[0].modes.map((mode) => mode.id);
   elements.modeSwitch.innerHTML = "";
 
   modes.forEach((mode) => {
@@ -347,39 +416,108 @@ function renderTokenTable(group, tokens) {
   const plan = getImportPlan();
   const operationMap = new Map(plan.operations.filter((operation) => operation.tokenId).map((operation) => [operation.tokenId, operation]));
   const wrap = document.createElement("div");
-  wrap.className = "token-table";
+  wrap.className = "token-table editable-token-table";
 
   const header = document.createElement("div");
-  header.className = "token-row token-row-head";
+  header.className = "token-row token-row-head token-row-edit-head";
   header.innerHTML = `
     <span>Name</span>
     <span>Light</span>
     <span>Dark</span>
+    <span>Review</span>
     <span>Plan</span>
   `;
   wrap.append(header);
 
   tokens.forEach((token) => {
     const operation = operationMap.get(token.id);
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "token-row";
+    const isRemoved = state.removedTokenIds.has(token.id);
+    const row = document.createElement("div");
+    row.className = "token-row token-row-edit";
     row.dataset.active = String(token.id === state.selectedItemId);
-    row.addEventListener("click", () => {
+    row.dataset.removed = String(isRemoved);
+
+    const nameCell = document.createElement("div");
+    nameCell.className = "token-name editor-cell";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "token-input";
+    nameInput.value = token.name;
+    nameInput.setAttribute("aria-label", `${token.name} name`);
+    nameInput.addEventListener("focus", () => {
+      state.selectedItemId = token.id;
+      renderInspector();
+      renderDetails();
+    });
+    nameInput.addEventListener("input", (event) => {
+      updateToken(token.id, (draftToken) => {
+        draftToken.name = event.target.value.trim();
+      });
+      render();
+    });
+
+    const description = document.createElement("small");
+    description.textContent = token.description || "";
+    nameCell.append(nameInput, description);
+
+    const lightCell = document.createElement("span");
+    lightCell.textContent = formatTokenValue(token.valuesByMode.light);
+
+    const darkCell = document.createElement("span");
+    darkCell.textContent = formatTokenValue(token.valuesByMode.dark);
+
+    const reviewCell = document.createElement("div");
+    reviewCell.className = "review-actions";
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = `review-chip${isRemoved ? " is-danger" : ""}`;
+    removeButton.textContent = isRemoved ? "Restore" : "Remove";
+    removeButton.addEventListener("click", () => {
+      toggleTokenRemoved(token.id);
+      if (state.removedTokenIds.has(state.selectedItemId) && token.id === state.selectedItemId) {
+        state.selectedItemId = getFirstVisibleTokenIdInGroup(group) || state.selectedItemId;
+      }
+      render();
+    });
+    reviewCell.append(removeButton);
+
+    if (isSemanticToken(token)) {
+      const aliasButton = document.createElement("button");
+      aliasButton.type = "button";
+      aliasButton.className = `review-chip${token.aliasOf ? " is-active" : ""}`;
+      aliasButton.textContent = token.aliasOf ? "Alias On" : "Alias Off";
+      aliasButton.addEventListener("click", () => {
+        updateToken(token.id, (draftToken) => {
+          if (draftToken.aliasOf) {
+            delete draftToken.aliasOf;
+          } else {
+            const fallbackTarget = getAliasFallbackTarget(draftToken);
+            if (fallbackTarget) {
+              draftToken.aliasOf = fallbackTarget;
+            }
+          }
+        });
+        render();
+      });
+      reviewCell.append(aliasButton);
+    }
+
+    const planCell = document.createElement("span");
+    planCell.className = "plan-cell";
+    planCell.innerHTML = `<i class="status-dot" data-status="${token.status}"></i>${formatOperationLabel(operation, token.id)}`;
+
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("input, button")) {
+        return;
+      }
       state.selectedItemId = token.id;
       renderInspector();
       renderDetails();
     });
 
-    row.innerHTML = `
-      <span class="token-name">
-        <strong>${token.name}</strong>
-        <small>${token.description || ""}</small>
-      </span>
-      <span>${formatTokenValue(token.valuesByMode.light)}</span>
-      <span>${formatTokenValue(token.valuesByMode.dark)}</span>
-      <span><i class="status-dot" data-status="${token.status}"></i>${formatOperationLabel(operation)}</span>
-    `;
+    row.append(nameCell, lightCell, darkCell, reviewCell, planCell);
     wrap.append(row);
   });
 
@@ -454,8 +592,13 @@ function renderSourceSignals(item, image, plan) {
     lines.push(`Notes: ${item.source.notes.join("; ")}`);
   }
   if (item.aliasOf) {
-    const target = getFlattenedDocument().tokenMap.get(item.aliasOf.tokenId);
+    const target = getReviewFlattenedDocument().tokenMap.get(item.aliasOf.tokenId);
     lines.push(`Alias: ${item.aliasOf.collectionId} -> ${target?.name || item.aliasOf.tokenId}`);
+  } else if (isSemanticToken(item)) {
+    lines.push("Alias: disabled");
+  }
+  if (state.removedTokenIds.has(item.id)) {
+    lines.push("Review status: removed from current import draft");
   }
   if (operation) {
     lines.push(`Import plan: ${formatOperationLabel(operation)}`);
@@ -573,14 +716,14 @@ function syncSelectionForView(viewId) {
   }
 
   if (viewId === "normalized") {
-    state.selectedGroupId = workspace.document.collections[0].groups[0].id;
-    state.selectedItemId = workspace.document.collections[0].groups[0].tokens[0].id;
+    state.selectedGroupId = getReviewDocument().collections[0].groups[0].id;
+    state.selectedItemId = getReviewDocument().collections[0].groups[0].tokens[0]?.id || null;
     return;
   }
 
   const semanticGroups = getSemanticSuggestionGroups();
-  state.selectedGroupId = semanticGroups[0].id;
-  state.selectedItemId = semanticGroups[0].items[0].id;
+  state.selectedGroupId = semanticGroups[0]?.id || null;
+  state.selectedItemId = semanticGroups[0]?.items[0]?.id || null;
 }
 
 function getGroupsForActiveView() {
@@ -593,9 +736,11 @@ function getGroupsForActiveView() {
   }
 
   if (state.activeView === "normalized") {
-    return workspace.document.collections.flatMap((collection) =>
+    const reviewFlat = getReviewFlattenedDocument();
+    return getReviewDocument().collections.flatMap((collection) =>
       collection.groups.map((group) => ({
         ...group,
+        tokens: group.tokens.map((token) => reviewFlat.tokenMap.get(token.id) || token),
         summary:
           collection.name === "Primitives"
             ? "基于 VARIABLE_SCHEMA 的真实 token 草案，可直接进入导入计划。"
@@ -624,10 +769,38 @@ function getFirstItemId(group) {
   return items[0]?.id || null;
 }
 
+function getFirstVisibleTokenIdInGroup(group) {
+  return getItemsForGroup(group).find((item) => !state.removedTokenIds.has(item.id))?.id || null;
+}
+
 function getSelectedItem() {
   const group = getSelectedGroup();
   if (!group) return null;
   return getItemsForGroup(group).find((item) => item.id === state.selectedItemId) || null;
+}
+
+function getAliasFallbackTarget(token) {
+  if (!token.collectionId || token.collectionId !== "semantics") {
+    return null;
+  }
+
+  const flattened = getReviewFlattenedDocument();
+  const semanticMappings = {
+    "surface.default": "token-color-surface-0",
+    "surface.brand": "token-color-brand-500",
+    "text.primary": "token-color-text-900"
+  };
+
+  const targetId = semanticMappings[token.name];
+  if (targetId && flattened.tokenMap.has(targetId)) {
+    return { collectionId: "primitives", tokenId: targetId };
+  }
+
+  const firstColorPrimitive = flattened.tokens.find(
+    (candidate) => candidate.collectionId === "primitives" && candidate.resolvedType === token.resolvedType
+  );
+
+  return firstColorPrimitive ? { collectionId: firstColorPrimitive.collectionId, tokenId: firstColorPrimitive.id } : null;
 }
 
 function formatTokenValue(value) {
@@ -639,7 +812,8 @@ function formatTokenValue(value) {
   return "—";
 }
 
-function formatOperationLabel(operation) {
+function formatOperationLabel(operation, tokenId) {
+  if (tokenId && state.removedTokenIds.has(tokenId)) return "Removed";
   if (!operation) return "Pending";
   if (operation.kind === "create-token") return "Create";
   if (operation.kind === "update-token") return "Update";
@@ -658,7 +832,7 @@ function buildSelectedMeta(item, image, plan) {
     parts.push(item.meta);
   }
   if (operation) {
-    parts.push(`Planner: ${formatOperationLabel(operation)}`);
+    parts.push(`Planner: ${formatOperationLabel(operation, item.id)}`);
   }
   if (image) {
     parts.push(`Reference: ${image.frame} / ${formatLabel(image.mode)}`);
@@ -668,7 +842,7 @@ function buildSelectedMeta(item, image, plan) {
 }
 
 function currentReviewCopy() {
-  return "在这里确认 token 命名、状态、alias 和导入前的冲突策略。";
+  return "在这里确认 token 命名、删除、alias 开关和导入前的冲突策略。";
 }
 
 function formatLabel(value) {
