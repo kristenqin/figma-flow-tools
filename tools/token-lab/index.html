@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Token Lab / Import Workbench</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Figma Flow Tools / Token Lab</p>
+          <h1>Image To Variables Workbench</h1>
+          <p class="topbar-copy">
+            把一批界面图整理成可 review、可命名、可导入 Figma Variables 的 token 草案。
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <button id="useSampleButton" class="ghost-button" type="button">Load Sample Batch</button>
+          <button class="primary-button" type="button">Import To Figma</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="panel left-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Batch</p>
+              <h2 id="batchName">Token Batch</h2>
+            </div>
+            <span id="consistencyScore" class="score-pill">Consistency 0</span>
+          </div>
+
+          <div class="panel-scroll">
+            <section class="dropzone-card">
+              <p class="dropzone-label">Upload Images</p>
+              <p class="dropzone-copy">
+                建议上传同一产品、同一主题、同一端的 5 到 20 张界面图。第一版先用样例批次演示完整流程。
+              </p>
+              <div class="dropzone-shell">
+                <div class="dropzone-mark">+</div>
+                <div>
+                  <strong>Drop screenshots here</strong>
+                  <p>或点击加载预置样例，直接查看 review 和 import preview</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="summary-card">
+              <p class="card-label">Batch Summary</p>
+              <dl class="summary-grid" id="batchSummary"></dl>
+            </section>
+
+            <section class="summary-card">
+              <div class="section-head">
+                <div>
+                  <p class="card-label">Image Queue</p>
+                  <p class="section-copy">按 mode 和页面类型浏览输入素材。</p>
+                </div>
+                <span id="imageCountBadge" class="mini-badge">0 images</span>
+              </div>
+              <div id="imageQueue" class="image-queue"></div>
+            </section>
+          </div>
+        </aside>
+
+        <section class="panel center-panel">
+          <div class="panel-header center-header">
+            <div>
+              <p class="panel-kicker">Pipeline</p>
+              <h2 id="activeViewTitle">Normalized Tokens</h2>
+              <p id="activeViewSummary" class="section-copy"></p>
+            </div>
+            <div id="stageRail" class="stage-rail" aria-label="分析阶段"></div>
+          </div>
+
+          <div class="panel-scroll center-scroll">
+            <section class="workspace-strip">
+              <article class="hero-card">
+                <div>
+                  <p class="card-label">Review Focus</p>
+                  <h3 id="reviewFocusTitle">Primitives / Color</h3>
+                  <p id="reviewFocusCopy" class="hero-copy"></p>
+                </div>
+                <div class="hero-metrics" id="heroMetrics"></div>
+              </article>
+
+              <article class="mode-card">
+                <p class="card-label">Mode Scope</p>
+                <div class="segmented" id="modeSwitch"></div>
+                <p class="section-copy">
+                  当前原型优先展示 `light / dark` 的 review 和导入差异，避免 mode 自动推断过度承诺。
+                </p>
+              </article>
+            </section>
+
+            <section class="view-nav">
+              <div id="viewTabs" class="tab-row" aria-label="数据层级"></div>
+              <div class="nav-meta">
+                <span id="selectionBadge" class="selection-badge">0 selected</span>
+              </div>
+            </section>
+
+            <section class="content-grid">
+              <div class="group-column">
+                <div class="section-head">
+                  <div>
+                    <p class="card-label">Groups</p>
+                    <p class="section-copy">在不同层级间切换，检查从 raw 到 normalized 的收敛过程。</p>
+                  </div>
+                </div>
+                <div id="groupList" class="group-list"></div>
+              </div>
+
+              <div class="detail-column">
+                <div class="section-head">
+                  <div>
+                    <p class="card-label">Review Table</p>
+                    <p class="section-copy">聚类、命名、alias 和 mode 值都在这里被确认。</p>
+                  </div>
+                </div>
+                <div id="detailPane" class="detail-pane"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="panel right-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Inspector</p>
+              <h2 id="inspectorTitle">Token Detail</h2>
+            </div>
+            <span id="inspectorTypeBadge" class="type-pill">COLOR</span>
+          </div>
+
+          <div class="panel-scroll inspector-scroll">
+            <section class="inspector-card">
+              <p class="card-label">Selected Item</p>
+              <h3 id="selectedName">Select a token</h3>
+              <p id="selectedMeta" class="section-copy"></p>
+            </section>
+
+            <section class="inspector-card">
+              <p class="card-label">Mode Values</p>
+              <div id="modeValues" class="mode-values"></div>
+            </section>
+
+            <section class="inspector-card">
+              <p class="card-label">Source Signals</p>
+              <ul id="sourceSignals" class="signal-list"></ul>
+            </section>
+
+            <section class="inspector-card">
+              <div class="section-head">
+                <div>
+                  <p class="card-label">Import Preview</p>
+                  <p class="section-copy">导入策略会影响冲突处理和预计写入结果。</p>
+                </div>
+              </div>
+              <div id="strategySwitch" class="segmented compact"></div>
+              <div id="importStats" class="import-stats"></div>
+              <div id="conflictList" class="conflict-list"></div>
+            </section>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./data/mock-analysis.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

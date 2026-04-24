@@ -37,6 +37,8 @@
 
 从一批界面图片中提取颜色、间距、圆角等视觉规律，整理为可导入 Figma Variables 的 token 草案。
 
+位置：`tools/token-lab`
+
 当前阶段定位：
 
 - 批量图片分析
