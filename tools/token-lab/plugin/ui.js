@@ -1,10 +1,11 @@
 const planner = window.TokenLabImportPlanner;
-const sampleDocument = structuredClone(window.TOKEN_LAB_PLUGIN_SAMPLE_DOCUMENT);
+const sampleDocument = JSON.parse(JSON.stringify(window.TOKEN_LAB_PLUGIN_SAMPLE_DOCUMENT));
 
 const state = {
   strategy: "skip-existing",
   snapshot: null,
-  error: null
+  error: null,
+  lastResult: null
 };
 
 const elements = {
@@ -34,6 +35,14 @@ window.onmessage = (event) => {
     return;
   }
 
+  if (message.type === "token-lab/import-result") {
+    state.lastResult = message.payload.result;
+    state.snapshot = message.payload.snapshot;
+    state.error = null;
+    render();
+    return;
+  }
+
   if (message.type === "token-lab/error") {
     state.error = message.payload.message;
     render();
@@ -45,7 +54,15 @@ elements.refreshButton.addEventListener("click", () => {
 });
 
 elements.importButton.addEventListener("click", () => {
-  parent.postMessage({ pluginMessage: { type: "token-lab/request-import" } }, "*");
+  parent.postMessage({
+    pluginMessage: {
+      type: "token-lab/request-import",
+      payload: {
+        document: sampleDocument,
+        strategy: state.strategy
+      }
+    }
+  }, "*");
 });
 
 function init() {
@@ -64,6 +81,8 @@ function render() {
   elements.variableCount.textContent = snapshot ? String(countVariables(snapshot.collections)) : "—";
   elements.statusNote.textContent = state.error
     ? state.error
+    : state.lastResult
+      ? `Last import: ${state.lastResult.stats.created} created, ${state.lastResult.stats.updated} updated, ${state.lastResult.stats.aliases} alias bindings.`
     : snapshot
       ? "Current file snapshot loaded from figma.variables."
       : "Waiting for plugin main thread to return the current variable snapshot.";
@@ -148,15 +167,16 @@ function renderConflictList(plan) {
     return;
   }
 
-  const messages = [
-    ...plan.conflicts,
-    ...plan.validationIssues.map((issue) => ({
-      tokenName: issue.code,
-      collection: "Validation",
-      issue: issue.message,
-      suggestion: issue.level === "error" ? "Resolve before import." : "Review before import."
-    }))
-  ];
+  const messages = []
+    .concat(plan.conflicts)
+    .concat(
+      plan.validationIssues.map((issue) => ({
+        tokenName: issue.code,
+        collection: "Validation",
+        issue: issue.message,
+        suggestion: issue.level === "error" ? "Resolve before import." : "Review before import."
+      }))
+    );
 
   if (!messages.length) {
     elements.conflictList.innerHTML = `
@@ -164,23 +184,36 @@ function renderConflictList(plan) {
         <strong>No blockers</strong>
         <p>Sample draft can be planned against the current file without validation errors.</p>
         <span>Planner</span>
-        <small>The next step is wiring create / update operations in the main thread.</small>
+        <small>Main thread import executor is available for create / update / alias runs.</small>
       </article>
     `;
-    return;
+  } else {
+    messages.forEach((conflict) => {
+      const card = document.createElement("article");
+      card.className = "conflict-card";
+      card.innerHTML = `
+        <strong>${conflict.tokenName}</strong>
+        <p>${conflict.issue}</p>
+        <span>${conflict.collection}</span>
+        <small>${conflict.suggestion}</small>
+      `;
+      elements.conflictList.append(card);
+    });
   }
 
-  messages.forEach((conflict) => {
-    const card = document.createElement("article");
-    card.className = "conflict-card";
-    card.innerHTML = `
-      <strong>${conflict.tokenName}</strong>
-      <p>${conflict.issue}</p>
-      <span>${conflict.collection}</span>
-      <small>${conflict.suggestion}</small>
-    `;
-    elements.conflictList.append(card);
-  });
+  if (state.lastResult && state.lastResult.logs && state.lastResult.logs.length) {
+    state.lastResult.logs.slice(-6).forEach((log) => {
+      const card = document.createElement("article");
+      card.className = "conflict-card";
+      card.innerHTML = `
+        <strong>${log.level.toUpperCase()}</strong>
+        <p>${log.message}</p>
+        <span>Import Log</span>
+        <small>Runtime executor output</small>
+      `;
+      elements.conflictList.append(card);
+    });
+  }
 }
 
 function countVariables(collections) {

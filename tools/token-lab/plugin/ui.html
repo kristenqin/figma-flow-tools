@@ -211,11 +211,694 @@
         <div id="conflictList" class="conflict-list"></div>
       </section>
 
-      <p id="statusNote" class="status-note"></p>
+      <section class="panel">
+        <p class="eyebrow">Runtime Status</p>
+        <p id="statusNote" class="status-note"></p>
+      </section>
     </main>
 
-    <script src="./import-planner.js"></script>
-    <script src="./sample-document.js"></script>
-    <script src="./ui.js"></script>
+    <script>
+      (function bootstrapImportPlanner() {
+        function flattenDocument(documentDraft) {
+          var collectionMap = new Map();
+          var tokenMap = new Map();
+          var tokens = [];
+
+          documentDraft.collections.forEach(function (collection) {
+            collectionMap.set(collection.id, collection);
+
+            collection.groups.forEach(function (group) {
+              group.tokens.forEach(function (token) {
+                var enriched = Object.assign({}, token, {
+                  collectionId: collection.id,
+                  collectionName: collection.name,
+                  collectionDefaultMode: collection.defaultMode,
+                  modeIds: collection.modes.map(function (mode) { return mode.id; }),
+                  groupId: group.id,
+                  groupName: group.name,
+                  kind: group.kind
+                });
+
+                tokens.push(enriched);
+                tokenMap.set(token.id, enriched);
+              });
+            });
+          });
+
+          return {
+            collections: documentDraft.collections,
+            collectionMap: collectionMap,
+            tokenMap: tokenMap,
+            tokens: tokens
+          };
+        }
+
+        function validateTokenDocument(documentDraft) {
+          var issues = [];
+          var flat = flattenDocument(documentDraft);
+
+          documentDraft.collections.forEach(function (collection) {
+            var modeIds = new Set(collection.modes.map(function (mode) { return mode.id; }));
+            var nameSet = new Set();
+
+            if (!modeIds.has(collection.defaultMode)) {
+              issues.push({
+                level: "error",
+                code: "default-mode",
+                message: "Collection " + collection.name + " is missing default mode " + collection.defaultMode + "."
+              });
+            }
+
+            collection.groups.forEach(function (group) {
+              group.tokens.forEach(function (token) {
+                var key = token.name + "::" + token.resolvedType;
+
+                if (!token.name) {
+                  issues.push({
+                    level: "error",
+                    code: "token-name",
+                    message: "Token " + token.id + " is missing a name."
+                  });
+                }
+
+                if (nameSet.has(key)) {
+                  issues.push({
+                    level: "error",
+                    code: "duplicate-token-name",
+                    message: "Duplicate token name " + token.name + " in collection " + collection.name + "."
+                  });
+                } else {
+                  nameSet.add(key);
+                }
+
+                if (!token.valuesByMode || !token.valuesByMode[collection.defaultMode]) {
+                  issues.push({
+                    level: "error",
+                    code: "default-value",
+                    message: "Token " + token.name + " is missing a default mode value."
+                  });
+                }
+
+                Object.keys(token.valuesByMode || {}).forEach(function (modeId) {
+                  if (!modeIds.has(modeId)) {
+                    issues.push({
+                      level: "error",
+                      code: "unknown-mode",
+                      message: "Token " + token.name + " references unknown mode " + modeId + "."
+                    });
+                  }
+                });
+
+                if (token.aliasOf && !flat.tokenMap.has(token.aliasOf.tokenId)) {
+                  issues.push({
+                    level: "error",
+                    code: "missing-alias-target",
+                    message: "Token " + token.name + " references missing alias target " + token.aliasOf.tokenId + "."
+                  });
+                }
+              });
+            });
+          });
+
+          return issues;
+        }
+
+        function buildSnapshotIndex(snapshot) {
+          var collectionNames = new Set();
+          var variableIndex = new Map();
+
+          snapshot.collections.forEach(function (collection) {
+            collectionNames.add(collection.name);
+            collection.variables.forEach(function (variable) {
+              variableIndex.set(
+                collection.name + "::" + normalizeFigmaVariableName(variable.name) + "::" + variable.resolvedType,
+                Object.assign({ collectionName: collection.name }, variable)
+              );
+            });
+          });
+
+          return {
+            collectionNames: collectionNames,
+            variableIndex: variableIndex
+          };
+        }
+
+        function buildRename(name, existingNames) {
+          var candidate = name + ".copy";
+          var index = 2;
+
+          while (existingNames.has(candidate)) {
+            candidate = name + ".copy" + index;
+            index += 1;
+          }
+
+          return candidate;
+        }
+
+        function buildImportPlan(documentDraft, snapshot, strategy) {
+          var validationIssues = validateTokenDocument(documentDraft);
+          var flat = flattenDocument(documentDraft);
+          var snapshotIndex = buildSnapshotIndex(snapshot);
+          var knownNamesByCollection = new Map();
+          var operations = [];
+          var aliasOperations = [];
+          var conflicts = [];
+
+          flat.collections.forEach(function (collection) {
+            knownNamesByCollection.set(
+              collection.name,
+              new Set(
+                (((snapshot.collections.find(function (entry) { return entry.name === collection.name; }) || {}).variables) || []).map(
+                  function (variable) { return variable.name; }
+                )
+              )
+            );
+
+            operations.push({
+              kind: snapshotIndex.collectionNames.has(collection.name) ? "reuse-collection" : "create-collection",
+              collectionName: collection.name
+            });
+          });
+
+          flat.tokens.forEach(function (token) {
+            var runtimeName = normalizeFigmaVariableName(token.name);
+            var collisionKey = token.collectionName + "::" + runtimeName + "::" + token.resolvedType;
+            var existingVariable = snapshotIndex.variableIndex.get(collisionKey);
+            var collectionNames = knownNamesByCollection.get(token.collectionName) || new Set();
+
+            if (existingVariable) {
+              conflicts.push({
+                tokenName: runtimeName,
+                collection: token.collectionName,
+                issue: "Name already exists in current file",
+                suggestion:
+                  strategy === "replace-values"
+                    ? "Planner will reuse existing variable and update values."
+                    : strategy === "rename-incoming"
+                      ? "Planner will rename incoming token."
+                      : "Planner will skip this token."
+              });
+
+              if (strategy === "replace-values") {
+                operations.push({
+                  kind: "update-token",
+                  tokenId: token.id,
+                  tokenName: runtimeName,
+                  collectionName: token.collectionName
+                });
+                return;
+              }
+
+              if (strategy === "rename-incoming") {
+                var renamed = buildRename(runtimeName, collectionNames);
+                collectionNames.add(renamed);
+                operations.push({
+                  kind: "create-token",
+                  tokenId: token.id,
+                  tokenName: renamed,
+                  originalName: token.name,
+                  collectionName: token.collectionName
+                });
+                return;
+              }
+
+              operations.push({
+                kind: "skip-token",
+                tokenId: token.id,
+                tokenName: token.name,
+                collectionName: token.collectionName
+              });
+              return;
+            }
+
+            collectionNames.add(runtimeName);
+            operations.push({
+              kind: "create-token",
+              tokenId: token.id,
+              tokenName: runtimeName,
+              collectionName: token.collectionName
+            });
+          });
+
+          flat.tokens
+            .filter(function (token) { return token.aliasOf; })
+            .forEach(function (token) {
+              var target = flat.tokenMap.get(token.aliasOf.tokenId);
+              if (!target) {
+                return;
+              }
+
+              aliasOperations.push({
+                kind: "bind-alias",
+                tokenName: token.name,
+                targetName: target.name,
+                collectionName: token.collectionName
+              });
+            });
+
+          return {
+            strategy: strategy,
+            stats: {
+              createCollections: operations.filter(function (operation) { return operation.kind === "create-collection"; }).length,
+              reuseCollections: operations.filter(function (operation) { return operation.kind === "reuse-collection"; }).length,
+              createTokens: operations.filter(function (operation) { return operation.kind === "create-token"; }).length,
+              updateTokens: operations.filter(function (operation) { return operation.kind === "update-token"; }).length,
+              skipTokens: operations.filter(function (operation) { return operation.kind === "skip-token"; }).length,
+              aliasBindings: aliasOperations.length,
+              validationErrors: validationIssues.filter(function (issue) { return issue.level === "error"; }).length,
+              validationWarnings: validationIssues.filter(function (issue) { return issue.level === "warning"; }).length
+            },
+            operations: operations,
+            aliasOperations: aliasOperations,
+            conflicts: conflicts,
+            validationIssues: validationIssues
+          };
+        }
+
+        window.TokenLabImportPlanner = {
+          flattenDocument: flattenDocument,
+          validateTokenDocument: validateTokenDocument,
+          buildImportPlan: buildImportPlan
+        };
+
+        function normalizeFigmaVariableName(name) {
+          var segments = String(name || "")
+            .split(/[./]+/)
+            .map(function (segment) { return segment.trim(); })
+            .filter(Boolean);
+
+          return segments.join("/") || "";
+        }
+      }());
+    </script>
+
+    <script>
+      window.TOKEN_LAB_PLUGIN_SAMPLE_DOCUMENT = {
+        version: "0.1",
+        meta: {
+          projectName: "Acme Mobile",
+          sourceType: "screenshots",
+          imageCount: 8,
+          generatedAt: "2026-04-24T10:30:00Z"
+        },
+        collections: [
+          {
+            id: "primitives",
+            name: "Primitives",
+            defaultMode: "light",
+            modes: [
+              { id: "light", name: "Light" },
+              { id: "dark", name: "Dark" }
+            ],
+            groups: [
+              {
+                id: "primitive-color",
+                name: "Primitive / Color",
+                kind: "color",
+                tokens: [
+                  {
+                    id: "token-color-surface-0",
+                    name: "color.neutral.0",
+                    resolvedType: "COLOR",
+                    status: "approved",
+                    description: "Primary light surface",
+                    valuesByMode: {
+                      light: { type: "color", hex: "#F6F5F1", rgba: { r: 0.9647, g: 0.9608, b: 0.9451, a: 1 } },
+                      dark: { type: "color", hex: "#121315", rgba: { r: 0.0706, g: 0.0745, b: 0.0824, a: 1 } }
+                    },
+                    source: { origin: "merged", confidence: 0.95, sampleCount: 28 }
+                  },
+                  {
+                    id: "token-color-text-900",
+                    name: "color.neutral.900",
+                    resolvedType: "COLOR",
+                    status: "approved",
+                    description: "Primary body text",
+                    valuesByMode: {
+                      light: { type: "color", hex: "#1A1A1C", rgba: { r: 0.102, g: 0.102, b: 0.1098, a: 1 } },
+                      dark: { type: "color", hex: "#E9FFF6", rgba: { r: 0.9137, g: 1, b: 0.9647, a: 1 } }
+                    },
+                    source: { origin: "merged", confidence: 0.93, sampleCount: 22 }
+                  },
+                  {
+                    id: "token-color-brand-500",
+                    name: "color.brand.500",
+                    resolvedType: "COLOR",
+                    status: "reviewed",
+                    description: "Primary action and accent",
+                    valuesByMode: {
+                      light: { type: "color", hex: "#0F7A5C", rgba: { r: 0.0588, g: 0.4784, b: 0.3608, a: 1 } },
+                      dark: { type: "color", hex: "#34D3A3", rgba: { r: 0.2039, g: 0.8275, b: 0.6392, a: 1 } }
+                    },
+                    source: { origin: "merged", confidence: 0.9, sampleCount: 19 }
+                  }
+                ]
+              },
+              {
+                id: "primitive-space",
+                name: "Primitive / Space",
+                kind: "space",
+                tokens: [
+                  {
+                    id: "token-space-2",
+                    name: "space.2",
+                    resolvedType: "FLOAT",
+                    status: "approved",
+                    description: "Tight inline gap",
+                    valuesByMode: {
+                      light: { type: "float", value: 8, unit: "px" },
+                      dark: { type: "float", value: 8, unit: "px" }
+                    },
+                    source: { origin: "merged", confidence: 0.78, sampleCount: 7 }
+                  },
+                  {
+                    id: "token-space-4",
+                    name: "space.4",
+                    resolvedType: "FLOAT",
+                    status: "approved",
+                    description: "Primary card inset",
+                    valuesByMode: {
+                      light: { type: "float", value: 16, unit: "px" },
+                      dark: { type: "float", value: 16, unit: "px" }
+                    },
+                    source: { origin: "merged", confidence: 0.96, sampleCount: 11 }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "semantics",
+            name: "Semantics",
+            defaultMode: "light",
+            modes: [
+              { id: "light", name: "Light" },
+              { id: "dark", name: "Dark" }
+            ],
+            groups: [
+              {
+                id: "semantic-surface",
+                name: "Semantic / Surface",
+                kind: "color",
+                tokens: [
+                  {
+                    id: "token-surface-default",
+                    name: "surface.default",
+                    resolvedType: "COLOR",
+                    status: "reviewed",
+                    description: "Default app surface",
+                    aliasOf: { collectionId: "primitives", tokenId: "token-color-surface-0" },
+                    valuesByMode: {
+                      light: { type: "color", hex: "#F6F5F1", rgba: { r: 0.9647, g: 0.9608, b: 0.9451, a: 1 } },
+                      dark: { type: "color", hex: "#121315", rgba: { r: 0.0706, g: 0.0745, b: 0.0824, a: 1 } }
+                    },
+                    source: { origin: "manual", confidence: 0.87, sampleCount: 12 }
+                  },
+                  {
+                    id: "token-text-primary",
+                    name: "text.primary",
+                    resolvedType: "COLOR",
+                    status: "approved",
+                    aliasOf: { collectionId: "primitives", tokenId: "token-color-text-900" },
+                    description: "Main body text",
+                    valuesByMode: {
+                      light: { type: "color", hex: "#1A1A1C", rgba: { r: 0.102, g: 0.102, b: 0.1098, a: 1 } },
+                      dark: { type: "color", hex: "#E9FFF6", rgba: { r: 0.9137, g: 1, b: 0.9647, a: 1 } }
+                    },
+                    source: { origin: "manual", confidence: 0.9, sampleCount: 16 }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+    </script>
+
+    <script>
+      (function bootUI() {
+        var planner = window.TokenLabImportPlanner;
+        var sampleDocument = JSON.parse(JSON.stringify(window.TOKEN_LAB_PLUGIN_SAMPLE_DOCUMENT));
+
+        var state = {
+          strategy: "skip-existing",
+          snapshot: null,
+          error: null,
+          lastResult: null,
+          lastAck: null
+        };
+
+        var elements = {
+          editorType: document.querySelector("#editorType"),
+          currentPage: document.querySelector("#currentPage"),
+          collectionCount: document.querySelector("#collectionCount"),
+          variableCount: document.querySelector("#variableCount"),
+          strategySwitch: document.querySelector("#strategySwitch"),
+          statGrid: document.querySelector("#statGrid"),
+          collectionList: document.querySelector("#collectionList"),
+          conflictList: document.querySelector("#conflictList"),
+          refreshButton: document.querySelector("#refreshButton"),
+          importButton: document.querySelector("#importButton"),
+          statusNote: document.querySelector("#statusNote")
+        };
+
+        window.onmessage = function (event) {
+          var message = event.data.pluginMessage;
+          if (!message) {
+            return;
+          }
+
+          if (message.type === "token-lab/snapshot") {
+            state.snapshot = message.payload;
+            state.error = null;
+            render();
+            return;
+          }
+
+          if (message.type === "token-lab/ack") {
+            state.lastAck = message.payload.action;
+            state.error = null;
+            render();
+            return;
+          }
+
+          if (message.type === "token-lab/import-result") {
+            state.lastResult = message.payload.result;
+            state.snapshot = message.payload.snapshot;
+            state.error = null;
+            render();
+            return;
+          }
+
+          if (message.type === "token-lab/error") {
+            state.error = message.payload.message;
+            render();
+          }
+        };
+
+        elements.refreshButton.addEventListener("click", function () {
+          state.lastAck = "refresh-requested-from-ui";
+          state.error = null;
+          render();
+          parent.postMessage({ pluginMessage: { type: "token-lab/refresh-snapshot" } }, "*");
+        });
+
+        elements.importButton.addEventListener("click", function () {
+          state.lastAck = "import-requested-from-ui";
+          state.error = null;
+          render();
+          parent.postMessage({
+            pluginMessage: {
+              type: "token-lab/request-import",
+              payload: {
+                document: sampleDocument,
+                strategy: state.strategy
+              }
+            }
+          }, "*");
+        });
+
+        function init() {
+          renderStrategySwitch();
+          render();
+          parent.postMessage({ pluginMessage: { type: "token-lab/plugin-ready" } }, "*");
+        }
+
+        function render() {
+          var snapshot = state.snapshot;
+          var plan = snapshot ? planner.buildImportPlan(sampleDocument, normalizeSnapshot(snapshot), state.strategy) : null;
+
+          elements.editorType.textContent = snapshot ? snapshot.editorType : "loading";
+          elements.currentPage.textContent = snapshot ? snapshot.pageName : "Loading current page";
+          elements.collectionCount.textContent = snapshot ? String(snapshot.collectionCount) : "—";
+          elements.variableCount.textContent = snapshot ? String(countVariables(snapshot.collections)) : "—";
+          elements.statusNote.textContent = state.error
+            ? state.error
+            : state.lastResult
+              ? "Last import: " + state.lastResult.stats.created + " created, " + state.lastResult.stats.updated + " updated, " + state.lastResult.stats.aliases + " alias bindings."
+              : state.lastAck
+                ? "Runtime event: " + state.lastAck
+              : snapshot
+                ? "Current file snapshot loaded from figma.variables."
+                : "Waiting for plugin main thread to return the current variable snapshot.";
+
+          renderStatGrid(plan);
+          renderCollectionList(snapshot);
+          renderConflictList(plan);
+        }
+
+        function renderStrategySwitch() {
+          var strategies = [
+            ["skip-existing", "Skip Existing"],
+            ["rename-incoming", "Rename Incoming"],
+            ["replace-values", "Replace Values"]
+          ];
+
+          elements.strategySwitch.innerHTML = "";
+          strategies.forEach(function (pair) {
+            var id = pair[0];
+            var label = pair[1];
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = state.strategy === id ? "is-active" : "";
+            button.textContent = label;
+            button.addEventListener("click", function () {
+              state.strategy = id;
+              renderStrategySwitch();
+              render();
+            });
+            elements.strategySwitch.append(button);
+          });
+        }
+
+        function renderStatGrid(plan) {
+          elements.statGrid.innerHTML = "";
+
+          if (!plan) {
+            return;
+          }
+
+          [
+            ["Create Collections", plan.stats.createCollections],
+            ["Reuse Collections", plan.stats.reuseCollections],
+            ["Create Tokens", plan.stats.createTokens],
+            ["Update Tokens", plan.stats.updateTokens],
+            ["Skip Tokens", plan.stats.skipTokens],
+            ["Alias Bindings", plan.stats.aliasBindings]
+          ].forEach(function (entry) {
+            var card = document.createElement("article");
+            card.className = "stat-card";
+            card.innerHTML = "<span>" + entry[0] + "</span><strong>" + entry[1] + "</strong>";
+            elements.statGrid.append(card);
+          });
+        }
+
+        function renderCollectionList(snapshot) {
+          elements.collectionList.innerHTML = "";
+
+          if (!snapshot) {
+            return;
+          }
+
+          snapshot.collections.forEach(function (collection) {
+            var card = document.createElement("article");
+            card.className = "collection-card";
+            card.innerHTML =
+              "<div class=\"collection-head\"><strong>" + collection.name + "</strong><span>" + collection.variables.length + " vars</span></div>" +
+              "<p>Modes: " + collection.modes.map(function (mode) { return mode.name; }).join(", ") + "</p>" +
+              "<ul class=\"mini-list\">" +
+              collection.variables.slice(0, 4).map(function (variable) {
+                return "<li>" + variable.name + " · " + variable.resolvedType + "</li>";
+              }).join("") +
+              "</ul>";
+            elements.collectionList.append(card);
+          });
+        }
+
+        function renderConflictList(plan) {
+          var messages;
+
+          elements.conflictList.innerHTML = "";
+
+          if (!plan) {
+            return;
+          }
+
+          messages = []
+            .concat(plan.conflicts)
+            .concat(
+              plan.validationIssues.map(function (issue) {
+                return {
+                  tokenName: issue.code,
+                  collection: "Validation",
+                  issue: issue.message,
+                  suggestion: issue.level === "error" ? "Resolve before import." : "Review before import."
+                };
+              })
+            );
+
+          if (!messages.length) {
+            elements.conflictList.innerHTML =
+              "<article class=\"conflict-card\">" +
+              "<strong>No blockers</strong>" +
+              "<p>Sample draft can be planned against the current file without validation errors.</p>" +
+              "<span>Planner</span>" +
+              "<small>Main thread import executor is available for create / update / alias runs.</small>" +
+              "</article>";
+          } else {
+            messages.forEach(function (conflict) {
+              var card = document.createElement("article");
+              card.className = "conflict-card";
+              card.innerHTML =
+                "<strong>" + conflict.tokenName + "</strong>" +
+                "<p>" + conflict.issue + "</p>" +
+                "<span>" + conflict.collection + "</span>" +
+                "<small>" + conflict.suggestion + "</small>";
+              elements.conflictList.append(card);
+            });
+          }
+
+          if (state.lastResult && state.lastResult.logs && state.lastResult.logs.length) {
+            state.lastResult.logs.slice(-6).forEach(function (log) {
+              var card = document.createElement("article");
+              card.className = "conflict-card";
+              card.innerHTML =
+                "<strong>" + log.level.toUpperCase() + "</strong>" +
+                "<p>" + log.message + "</p>" +
+                "<span>Import Log</span>" +
+                "<small>Runtime executor output</small>";
+              elements.conflictList.append(card);
+            });
+          }
+        }
+
+        function countVariables(collections) {
+          return collections.reduce(function (count, collection) {
+            return count + collection.variables.length;
+          }, 0);
+        }
+
+        function normalizeSnapshot(snapshot) {
+          return {
+            collections: snapshot.collections.map(function (collection) {
+              return {
+                name: collection.name,
+                modes: collection.modes.map(function (mode) { return mode.name; }),
+                variables: collection.variables.map(function (variable) {
+                  return {
+                    name: variable.name,
+                    resolvedType: variable.resolvedType,
+                    modes: collection.modes.map(function (mode) { return mode.name; }),
+                    isAlias: variable.isAlias
+                  };
+                })
+              };
+            })
+          };
+        }
+
+        init();
+      }());
+    </script>
   </body>
 </html>

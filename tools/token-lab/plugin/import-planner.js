@@ -9,8 +9,7 @@
 
       collection.groups.forEach((group) => {
         group.tokens.forEach((token) => {
-          const enriched = {
-            ...token,
+          const enriched = Object.assign({}, token, {
             collectionId: collection.id,
             collectionName: collection.name,
             collectionDefaultMode: collection.defaultMode,
@@ -18,7 +17,7 @@
             groupId: group.id,
             groupName: group.name,
             kind: group.kind
-          };
+          });
 
           tokens.push(enriched);
           tokenMap.set(token.id, enriched);
@@ -111,10 +110,10 @@
     snapshot.collections.forEach((collection) => {
       collectionNames.add(collection.name);
       collection.variables.forEach((variable) => {
-        variableIndex.set(`${collection.name}::${variable.name}::${variable.resolvedType}`, {
-          collectionName: collection.name,
-          ...variable
-        });
+        variableIndex.set(
+          `${collection.name}::${normalizeFigmaVariableName(variable.name)}::${variable.resolvedType}`,
+          Object.assign({ collectionName: collection.name }, variable)
+        );
       });
     });
 
@@ -148,7 +147,11 @@
     flat.collections.forEach((collection) => {
       knownNamesByCollection.set(
         collection.name,
-        new Set((snapshot.collections.find((entry) => entry.name === collection.name)?.variables || []).map((variable) => variable.name))
+        new Set(
+          ((snapshot.collections.find((entry) => entry.name === collection.name) || {}).variables || []).map(
+            (variable) => variable.name
+          )
+        )
       );
 
       operations.push({
@@ -158,13 +161,14 @@
     });
 
     flat.tokens.forEach((token) => {
-      const collisionKey = `${token.collectionName}::${token.name}::${token.resolvedType}`;
+      const runtimeName = normalizeFigmaVariableName(token.name);
+      const collisionKey = `${token.collectionName}::${runtimeName}::${token.resolvedType}`;
       const existingVariable = snapshotIndex.variableIndex.get(collisionKey);
       const collectionNames = knownNamesByCollection.get(token.collectionName) || new Set();
 
       if (existingVariable) {
         conflicts.push({
-          tokenName: token.name,
+          tokenName: runtimeName,
           collection: token.collectionName,
           issue: "Name already exists in current file",
           suggestion:
@@ -179,14 +183,14 @@
           operations.push({
             kind: "update-token",
             tokenId: token.id,
-            tokenName: token.name,
+            tokenName: runtimeName,
             collectionName: token.collectionName
           });
           return;
         }
 
         if (strategy === "rename-incoming") {
-          const renamed = buildRename(token.name, collectionNames);
+          const renamed = buildRename(runtimeName, collectionNames);
           collectionNames.add(renamed);
           operations.push({
             kind: "create-token",
@@ -207,11 +211,11 @@
         return;
       }
 
-      collectionNames.add(token.name);
+      collectionNames.add(runtimeName);
       operations.push({
         kind: "create-token",
         tokenId: token.id,
-        tokenName: token.name,
+        tokenName: runtimeName,
         collectionName: token.collectionName
       });
     });
@@ -256,4 +260,13 @@
     validateTokenDocument,
     buildImportPlan
   };
+
+  function normalizeFigmaVariableName(name) {
+    const segments = String(name || "")
+      .split(/[./]+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    return segments.join("/") || "";
+  }
 }());
