@@ -7,6 +7,11 @@
 - 使用 Figma Plugin API 真实读取当前文件的 local variable collections
 - 把快照发送到插件 UI
 - 在插件 UI 里基于 sample `TokenLabDocument` 计算导入计划
+- 支持 draft review 编辑：
+  - 重命名 token
+  - Remove / Restore
+  - Alias On / Off
+- 导入按钮会发送“当前编辑后的 draft document”给 main thread
 - 切换 `Skip Existing / Rename Incoming / Replace Values`
 - 在主线程执行基础导入：创建 / 复用 collection、创建 / 更新普通 token、绑定 alias
 - UI 已改为单文件内联脚本，避免 Figma 插件环境下本地 `script src` 不加载导致“打开但无交互”
@@ -14,9 +19,9 @@
 
 当前还没做：
 
-- 从 UI draft 把编辑后的文档发送给 main thread
 - 更细的失败回滚和批次事务控制
 - 用真实分析结果替换 sample `TokenLabDocument`
+- 把浏览器版完整的多视图分析工作台也迁到 plugin
 
 ## 在 Figma 里加载
 
@@ -35,10 +40,4 @@ tools/token-lab/plugin/manifest.json
 - `code.js`
   插件主线程，负责读取真实 variable snapshot
 - `ui.html`
-  插件 UI 外壳
-- `ui.js`
-  插件 UI 交互和 planner 展示
-- `import-planner.js`
-  UI 内使用的导入计划器
-- `sample-document.js`
-  当前用于 planner 的 sample `TokenLabDocument`
+  单文件插件 UI，内含 planner、sample document 和 review 编辑逻辑
