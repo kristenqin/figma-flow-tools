@@ -69,6 +69,7 @@
       .header,
       .review-stack,
       .summary-grid,
+      .header-row,
       .strategy-switch,
       .stat-grid,
       .collection-list,
@@ -82,14 +83,40 @@
 
       .toolbar {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
+      }
+
+      .header-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .lang-switch {
+        display: inline-flex;
+        gap: 6px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+      }
+
+      .lang-switch button {
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
       }
 
       .copy,
       .section-copy,
       .status-note {
         color: var(--muted);
+      }
+
+      .status-note strong {
+        color: var(--text);
       }
 
       button,
@@ -256,11 +283,56 @@
         background: var(--danger);
       }
 
+      .token-value-cell {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .color-preview {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .color-swatch {
+        display: block;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: repeating-conic-gradient(#d9d9d9 0% 25%, #f4f4f4 0% 50%) 50% / 8px 8px;
+        overflow: hidden;
+      }
+
+      .color-swatch-fill {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .color-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .mode-value-card {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+      }
+
+      .mode-value-card span {
+        min-width: 0;
+      }
+
+      .mode-value-card .color-preview {
+        justify-content: flex-end;
       }
 
       .mode-value-card[data-active="true"] {
@@ -328,58 +400,60 @@
   <body>
     <main>
       <section class="panel header">
-        <div>
-          <p class="eyebrow">Token Lab / Figma Plugin</p>
-          <h1>Token Review And Import</h1>
+        <div class="header-row">
+          <div>
+            <p class="eyebrow" id="headerEyebrow">Token Lab / Figma Plugin</p>
+            <h1 id="headerTitle">Token Review And Import</h1>
+          </div>
+          <div id="languageSwitch" class="lang-switch"></div>
         </div>
-        <p class="copy">
-          先在插件里 review draft token，再把当前编辑后的文档直接发给 main thread 导入。
-        </p>
+        <p id="headerCopy" class="copy">先在插件里 review draft token，再把当前编辑后的文档直接发给 main thread 导入。</p>
       </section>
 
       <section class="panel toolbar">
-        <button id="refreshButton" type="button">Refresh Snapshot</button>
-        <button id="importButton" class="primary" type="button">Import Current Draft</button>
+        <button id="refreshButton" type="button">刷新快照</button>
+        <button id="analyzeButton" type="button">分析选区</button>
+        <button id="importButton" class="primary" type="button">导入当前 Draft</button>
       </section>
 
       <section class="panel">
-        <p class="eyebrow">Current File</p>
+        <p id="currentFileEyebrow" class="eyebrow">当前文件</p>
         <div class="summary-grid">
           <div class="summary-item">
-            <span>Editor</span>
-            <strong id="editorType">loading</strong>
+            <span id="labelEditor">Editor</span>
+            <strong id="editorType">加载中</strong>
           </div>
           <div class="summary-item">
-            <span>Current Page</span>
-            <strong id="currentPage">Loading</strong>
+            <span id="labelCurrentPage">Current Page</span>
+            <strong id="currentPage">加载中</strong>
           </div>
           <div class="summary-item">
-            <span>Collections</span>
+            <span id="labelCollections">Collections</span>
             <strong id="collectionCount">—</strong>
           </div>
           <div class="summary-item">
-            <span>Variables</span>
+            <span id="labelVariables">Variables</span>
             <strong id="variableCount">—</strong>
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <p class="eyebrow">Strategy</p>
+        <p id="strategyEyebrow" class="eyebrow">导入策略</p>
         <div id="strategySwitch" class="strategy-switch"></div>
       </section>
 
       <section class="panel review-shell">
         <div>
-          <p class="eyebrow">Review Draft</p>
-          <p class="section-copy">支持重命名、Remove / Restore、Alias On / Off，并实时重算导入计划。</p>
+          <p id="reviewEyebrow" class="eyebrow">审阅 Draft</p>
+          <p id="reviewCopy" class="section-copy">支持重命名、Remove / Restore、Alias On / Off，并可把选中画布分析后的 draft 直接导入。</p>
         </div>
         <div class="review-layout">
           <div id="groupList" class="group-list"></div>
           <div class="review-stack">
             <div id="reviewTitle" class="inspector-card">
               <strong>Primitives / Color</strong>
-              <p id="reviewSummary">Edit the current token draft before importing.</p>
+              <p id="reviewSummary">导入前先编辑当前 token draft。</p>
             </div>
             <div id="tokenTable" class="token-table"></div>
           </div>
@@ -387,41 +461,41 @@
       </section>
 
       <section class="panel">
-        <p class="eyebrow">Planner Stats</p>
+        <p id="plannerEyebrow" class="eyebrow">导入规划统计</p>
         <div id="statGrid" class="stat-grid"></div>
       </section>
 
       <section class="panel review-layout">
         <div class="review-stack">
           <div class="inspector-card">
-            <p class="eyebrow">Selected Token</p>
-            <strong id="selectedName">Select a token</strong>
-            <p id="selectedMeta">Choose a token row to inspect its current draft state.</p>
+            <p id="selectedTokenEyebrow" class="eyebrow">当前 Token</p>
+            <strong id="selectedName">请选择一个 token</strong>
+            <p id="selectedMeta">选择一个 token 行以查看当前 draft 状态。</p>
           </div>
           <div class="inspector-card">
-            <p class="eyebrow">Mode Values</p>
+            <p id="modeValuesEyebrow" class="eyebrow">模式值</p>
             <div id="modeValues" class="mode-values"></div>
           </div>
         </div>
         <div class="review-stack">
           <div class="inspector-card">
-            <p class="eyebrow">Signals</p>
+            <p id="signalsEyebrow" class="eyebrow">信号</p>
             <ul id="signalList" class="signal-list"></ul>
           </div>
           <div class="inspector-card">
-            <p class="eyebrow">Runtime Status</p>
+            <p id="runtimeStatusEyebrow" class="eyebrow">运行状态</p>
             <p id="statusNote" class="status-note"></p>
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <p class="eyebrow">Snapshot Collections</p>
+        <p id="snapshotEyebrow" class="eyebrow">文件快照集合</p>
         <div id="collectionList" class="collection-list"></div>
       </section>
 
       <section class="panel">
-        <p class="eyebrow">Conflicts And Logs</p>
+        <p id="conflictsEyebrow" class="eyebrow">冲突与日志</p>
         <div id="conflictList" class="conflict-list"></div>
       </section>
     </main>
@@ -850,11 +924,15 @@
         var planner = window.TokenLabImportPlanner;
         var initialDocument = JSON.parse(JSON.stringify(window.TOKEN_LAB_PLUGIN_SAMPLE_DOCUMENT));
         var state = {
+          language: "zh",
           strategy: "skip-existing",
           snapshot: null,
+          analysisInput: null,
+          analysisSummary: null,
           error: null,
           lastResult: null,
           lastAck: null,
+          draftOrigin: "sample",
           selectedGroupId: "primitive-color",
           selectedTokenId: "token-color-surface-0",
           draftDocument: initialDocument,
@@ -862,6 +940,25 @@
         };
 
         var elements = {
+          headerEyebrow: document.querySelector("#headerEyebrow"),
+          headerTitle: document.querySelector("#headerTitle"),
+          headerCopy: document.querySelector("#headerCopy"),
+          languageSwitch: document.querySelector("#languageSwitch"),
+          currentFileEyebrow: document.querySelector("#currentFileEyebrow"),
+          labelEditor: document.querySelector("#labelEditor"),
+          labelCurrentPage: document.querySelector("#labelCurrentPage"),
+          labelCollections: document.querySelector("#labelCollections"),
+          labelVariables: document.querySelector("#labelVariables"),
+          strategyEyebrow: document.querySelector("#strategyEyebrow"),
+          reviewEyebrow: document.querySelector("#reviewEyebrow"),
+          reviewCopy: document.querySelector("#reviewCopy"),
+          plannerEyebrow: document.querySelector("#plannerEyebrow"),
+          selectedTokenEyebrow: document.querySelector("#selectedTokenEyebrow"),
+          modeValuesEyebrow: document.querySelector("#modeValuesEyebrow"),
+          signalsEyebrow: document.querySelector("#signalsEyebrow"),
+          runtimeStatusEyebrow: document.querySelector("#runtimeStatusEyebrow"),
+          snapshotEyebrow: document.querySelector("#snapshotEyebrow"),
+          conflictsEyebrow: document.querySelector("#conflictsEyebrow"),
           editorType: document.querySelector("#editorType"),
           currentPage: document.querySelector("#currentPage"),
           collectionCount: document.querySelector("#collectionCount"),
@@ -879,8 +976,178 @@
           collectionList: document.querySelector("#collectionList"),
           conflictList: document.querySelector("#conflictList"),
           refreshButton: document.querySelector("#refreshButton"),
+          analyzeButton: document.querySelector("#analyzeButton"),
           importButton: document.querySelector("#importButton"),
           statusNote: document.querySelector("#statusNote")
+        };
+
+        var I18N = {
+          zh: {
+            headerEyebrow: "Token Lab / Figma 插件",
+            headerTitle: "Token 审阅与导入",
+            headerCopy: "先在插件里审阅 draft token，再把当前编辑后的文档发送给主线程导入。",
+            refreshButton: "刷新快照",
+            analyzeButton: "分析选区",
+            importButton: "导入当前 Draft",
+            currentFileEyebrow: "当前文件",
+            labelEditor: "编辑器",
+            labelCurrentPage: "当前页面",
+            labelCollections: "集合",
+            labelVariables: "变量",
+            strategyEyebrow: "导入策略",
+            reviewEyebrow: "审阅 Draft",
+            reviewCopy: "支持重命名、移除 / 恢复、Alias 开 / 关，并可把选中画布分析后的 draft 直接导入。",
+            plannerEyebrow: "导入规划统计",
+            selectedTokenEyebrow: "当前 Token",
+            modeValuesEyebrow: "模式值",
+            signalsEyebrow: "信号",
+            runtimeStatusEyebrow: "运行状态",
+            snapshotEyebrow: "文件快照集合",
+            conflictsEyebrow: "冲突与日志",
+            loading: "加载中",
+            loadingCurrentPage: "正在加载当前页面",
+            reviewSummaryDefault: "导入前先编辑当前 token draft。",
+            selectToken: "请选择一个 token",
+            selectTokenMeta: "选择一个 token 行以查看当前 draft 状态。",
+            strategySkip: "跳过已有",
+            strategyRename: "重命名导入",
+            strategyReplace: "替换现值",
+            tableName: "名称",
+            tableLight: "浅色",
+            tableDark: "深色",
+            tableReview: "审阅",
+            tablePlan: "计划",
+            remove: "移除",
+            restore: "恢复",
+            aliasOn: "Alias 开",
+            aliasOff: "Alias 关",
+            sourceOrigin: "来源",
+            sourceConfidence: "置信度",
+            sourceSamples: "样本数",
+            alias: "Alias",
+            aliasDisabled: "已关闭",
+            removedFromDraft: "审阅状态：已从当前导入 draft 中移除",
+            importPlan: "导入计划",
+            createCollections: "创建集合",
+            reuseCollections: "复用集合",
+            createTokens: "创建变量",
+            updateTokens: "更新变量",
+            skipTokens: "跳过变量",
+            aliasBindings: "Alias 绑定",
+            validationErrors: "校验错误",
+            varsShort: "个变量",
+            modes: "模式",
+            validation: "校验",
+            resolveBeforeImport: "请在导入前解决。",
+            reviewBeforeImport: "请在导入前复查。",
+            noBlockers: "无阻塞项",
+            draftCanImport: "当前 draft 可按所选策略导入。",
+            planner: "规划器",
+            executorReady: "主线程导入执行器已就绪。",
+            importLog: "导入日志",
+            executorOutput: "运行时执行输出",
+            draftSourceSelection: "Draft 来源：选区分析。已导出 {imageCount} 个画板，其中浅色 {lightCount} 个，深色 {darkCount} 个。",
+            currentDraftFromSelection: "当前 draft 来自 {imageCount} 个选中画板。",
+            runtimeEvent: "运行时事件：{event}",
+            snapshotLoaded: "当前文件快照已从 figma.variables 加载。",
+            waitingSnapshot: "等待插件主线程返回当前变量快照。",
+            lastImport: "最近一次导入：创建 {created} 个，更新 {updated} 个，绑定 Alias {aliases} 个。",
+            create: "创建",
+            update: "更新",
+            skip: "跳过",
+            removed: "已移除",
+            pending: "待处理",
+            primitiveGroupSummary: "基础值已可直接导入。",
+            semanticGroupSummary: "语义 token 可保留或取消 alias 绑定。",
+            selectionAnalysisRequested: "已从界面发起选区分析请求",
+            selectionAnalysisProcessing: "正在处理选区分析",
+            selectionAnalysisComplete: "选区分析完成",
+            refreshRequested: "已从界面发起刷新请求",
+            importRequested: "已从界面发起导入请求"
+          },
+          en: {
+            headerEyebrow: "Token Lab / Figma Plugin",
+            headerTitle: "Token Review And Import",
+            headerCopy: "Review the draft tokens in the plugin, then send the edited document to the main thread for import.",
+            refreshButton: "Refresh Snapshot",
+            analyzeButton: "Analyze Selection",
+            importButton: "Import Current Draft",
+            currentFileEyebrow: "Current File",
+            labelEditor: "Editor",
+            labelCurrentPage: "Current Page",
+            labelCollections: "Collections",
+            labelVariables: "Variables",
+            strategyEyebrow: "Strategy",
+            reviewEyebrow: "Review Draft",
+            reviewCopy: "Rename, Remove / Restore, and toggle Alias On / Off before importing the draft generated from the selected frames.",
+            plannerEyebrow: "Planner Stats",
+            selectedTokenEyebrow: "Selected Token",
+            modeValuesEyebrow: "Mode Values",
+            signalsEyebrow: "Signals",
+            runtimeStatusEyebrow: "Runtime Status",
+            snapshotEyebrow: "Snapshot Collections",
+            conflictsEyebrow: "Conflicts And Logs",
+            loading: "loading",
+            loadingCurrentPage: "Loading current page",
+            reviewSummaryDefault: "Edit the current token draft before importing.",
+            selectToken: "Select a token",
+            selectTokenMeta: "Choose a token row to inspect its current draft state.",
+            strategySkip: "Skip Existing",
+            strategyRename: "Rename Incoming",
+            strategyReplace: "Replace Values",
+            tableName: "Name",
+            tableLight: "Light",
+            tableDark: "Dark",
+            tableReview: "Review",
+            tablePlan: "Plan",
+            remove: "Remove",
+            restore: "Restore",
+            aliasOn: "Alias On",
+            aliasOff: "Alias Off",
+            sourceOrigin: "Origin",
+            sourceConfidence: "Confidence",
+            sourceSamples: "Samples",
+            alias: "Alias",
+            aliasDisabled: "disabled",
+            removedFromDraft: "Review status: removed from current import draft",
+            importPlan: "Import plan",
+            createCollections: "Create Collections",
+            reuseCollections: "Reuse Collections",
+            createTokens: "Create Tokens",
+            updateTokens: "Update Tokens",
+            skipTokens: "Skip Tokens",
+            aliasBindings: "Alias Bindings",
+            validationErrors: "Validation Errors",
+            varsShort: "vars",
+            modes: "Modes",
+            validation: "Validation",
+            resolveBeforeImport: "Resolve before import.",
+            reviewBeforeImport: "Review before import.",
+            noBlockers: "No blockers",
+            draftCanImport: "Current draft can be imported with the selected strategy.",
+            planner: "Planner",
+            executorReady: "Main thread import executor is ready.",
+            importLog: "Import Log",
+            executorOutput: "Runtime executor output",
+            draftSourceSelection: "Draft source: selection analysis. {imageCount} exported frame(s), {lightCount} light / {darkCount} dark.",
+            currentDraftFromSelection: "Current draft came from {imageCount} selected frame(s).",
+            runtimeEvent: "Runtime event: {event}",
+            snapshotLoaded: "Current file snapshot loaded from figma.variables.",
+            waitingSnapshot: "Waiting for plugin main thread to return the current variable snapshot.",
+            lastImport: "Last import: {created} created, {updated} updated, {aliases} alias bindings.",
+            create: "Create",
+            update: "Update",
+            skip: "Skip",
+            removed: "Removed",
+            pending: "Pending",
+            primitiveGroupSummary: "Base values ready for direct import.",
+            semanticGroupSummary: "Semantic tokens can keep or drop alias bindings.",
+            selectionAnalysisRequested: "Selection analysis requested from UI",
+            selectionAnalysisProcessing: "Processing selection analysis",
+            selectionAnalysisComplete: "Selection analysis complete",
+            refreshRequested: "Refresh requested from UI",
+            importRequested: "Import requested from UI"
+          }
         };
 
         window.onmessage = function (event) {
@@ -911,6 +1178,11 @@
             return;
           }
 
+          if (message.type === "token-lab/selection-analysis-input") {
+            applySelectionAnalysis(message.payload);
+            return;
+          }
+
           if (message.type === "token-lab/error") {
             state.error = message.payload.message;
             render();
@@ -921,7 +1193,14 @@
           state.lastAck = "refresh-requested-from-ui";
           state.error = null;
           render();
-          parent.postMessage({ pluginMessage: { type: "token-lab/refresh-snapshot" } }, "*");
+          parent.postMessage({ pluginMessage: { type: "token-lab/refresh-snapshot", payload: { language: state.language } } }, "*");
+        });
+
+        elements.analyzeButton.addEventListener("click", function () {
+          state.lastAck = "selection-analysis-requested-from-ui";
+          state.error = null;
+          render();
+          parent.postMessage({ pluginMessage: { type: "token-lab/analyze-selection", payload: { language: state.language } } }, "*");
         });
 
         elements.importButton.addEventListener("click", function () {
@@ -932,6 +1211,7 @@
             pluginMessage: {
               type: "token-lab/request-import",
               payload: {
+                language: state.language,
                 document: getPlanningDocument(),
                 strategy: state.strategy
               }
@@ -940,9 +1220,10 @@
         });
 
         function init() {
+          renderLanguageSwitch();
           renderStrategySwitch();
           render();
-          parent.postMessage({ pluginMessage: { type: "token-lab/plugin-ready" } }, "*");
+          parent.postMessage({ pluginMessage: { type: "token-lab/plugin-ready", payload: { language: state.language } } }, "*");
         }
 
         function cloneDocument(documentDraft) {
@@ -997,6 +1278,30 @@
           });
         }
 
+        function applySelectionAnalysis(payload) {
+          state.lastAck = "selection-analysis-processing";
+          state.error = null;
+          render();
+
+          analyzeSelectionPayload(payload)
+            .then(function (analysis) {
+              state.analysisInput = payload;
+              state.analysisSummary = analysis.summary;
+              state.draftDocument = analysis.document;
+              state.draftOrigin = "selection";
+              state.removedTokenIds = {};
+              state.selectedGroupId = analysis.firstGroupId || null;
+              state.selectedTokenId = analysis.firstTokenId || null;
+              state.error = null;
+              state.lastAck = "selection-analysis-complete";
+              render();
+            })
+            .catch(function (error) {
+              state.error = error && error.message ? error.message : String(error);
+              render();
+            });
+        }
+
         function getGroups() {
           return getReviewDocument().collections.reduce(function (all, collection) {
             return all.concat(
@@ -1007,8 +1312,8 @@
                   collectionId: collection.id,
                   summary:
                     collection.name === "Primitives"
-                      ? "Base values ready for direct import."
-                      : "Semantic tokens can keep or drop alias bindings."
+                      ? t("primitiveGroupSummary")
+                      : t("semanticGroupSummary")
                 };
               })
             );
@@ -1039,6 +1344,412 @@
           }) || null;
         }
 
+        function analyzeSelectionPayload(payload) {
+          if (!payload || !payload.images || !payload.images.length) {
+            throw new Error("No exportable selection images were returned from the Figma main thread.");
+          }
+
+          return Promise.all(payload.images.map(function (image, index) {
+            return analyzeImage(image, index);
+          })).then(function (imageAnalyses) {
+            return buildDocumentFromImageAnalyses(payload, imageAnalyses);
+          });
+        }
+
+        function analyzeImage(image, index) {
+          var modeId = image.modeHint === "dark" ? "dark" : "light";
+
+          return sampleImageColors(image.pngBase64).then(function (sample) {
+            var sorted = sample.colors.slice().sort(function (left, right) {
+              return right.count - left.count;
+            });
+            var surface = pickSurfaceColor(sorted);
+            var text = pickTextColor(sorted, surface);
+            var accent = pickAccentColor(sorted, surface, text);
+
+            return {
+              id: image.id,
+              name: image.name,
+              modeId: modeId,
+              width: image.width,
+              height: image.height,
+              colors: sorted,
+              surface: surface,
+              text: text,
+              accent: accent,
+              sampleCount: sample.sampleCount,
+              order: index
+            };
+          });
+        }
+
+        function buildDocumentFromImageAnalyses(payload, imageAnalyses) {
+          var lightImages = imageAnalyses.filter(function (image) { return image.modeId === "light"; });
+          var darkImages = imageAnalyses.filter(function (image) { return image.modeId === "dark"; });
+          var lightBase = lightImages[0] || imageAnalyses[0];
+          var darkBase = darkImages[0] || lightBase;
+          var imageCount = imageAnalyses.length;
+          var projectName = payload.pageName || "Figma Selection";
+          var colorTokens = [];
+          var semanticTokens = [];
+          var documentDraft;
+
+          colorTokens.push(createColorToken(
+            "token-color-surface-0",
+            "color.neutral.0",
+            "Detected dominant light and dark surfaces",
+            buildModeColorValues(lightBase.surface, darkBase.surface),
+            buildSourceMeta("merged", imageAnalyses, collectRawCandidates(imageAnalyses, "surface"))
+          ));
+
+          colorTokens.push(createColorToken(
+            "token-color-text-900",
+            "color.neutral.900",
+            "Detected primary contrast text candidates",
+            buildModeColorValues(lightBase.text, darkBase.text),
+            buildSourceMeta("merged", imageAnalyses, collectRawCandidates(imageAnalyses, "text"))
+          ));
+
+          colorTokens.push(createColorToken(
+            "token-color-brand-500",
+            "color.brand.500",
+            "Detected accent candidates from selected frames",
+            buildModeColorValues(lightBase.accent, darkBase.accent),
+            buildSourceMeta("detected", imageAnalyses, collectRawCandidates(imageAnalyses, "accent"))
+          ));
+
+          semanticTokens.push(createAliasToken(
+            "token-surface-default",
+            "surface.default",
+            "Alias to detected primary surface",
+            "token-color-surface-0",
+            buildModeColorValues(lightBase.surface, darkBase.surface),
+            buildSourceMeta("manual", imageAnalyses, collectRawCandidates(imageAnalyses, "surface"))
+          ));
+
+          semanticTokens.push(createAliasToken(
+            "token-text-primary",
+            "text.primary",
+            "Alias to detected primary text",
+            "token-color-text-900",
+            buildModeColorValues(lightBase.text, darkBase.text),
+            buildSourceMeta("manual", imageAnalyses, collectRawCandidates(imageAnalyses, "text"))
+          ));
+
+          semanticTokens.push(createAliasToken(
+            "token-surface-brand",
+            "surface.brand",
+            "Alias to detected brand accent",
+            "token-color-brand-500",
+            buildModeColorValues(lightBase.accent, darkBase.accent),
+            buildSourceMeta("manual", imageAnalyses, collectRawCandidates(imageAnalyses, "accent"))
+          ));
+
+          documentDraft = {
+            version: "0.1",
+            meta: {
+              projectName: projectName,
+              sourceType: "screenshots",
+              imageCount: imageCount,
+              generatedAt: new Date().toISOString()
+            },
+            collections: [
+              {
+                id: "primitives",
+                name: "Primitives",
+                defaultMode: "light",
+                modes: [
+                  { id: "light", name: "Light" },
+                  { id: "dark", name: "Dark" }
+                ],
+                groups: [
+                  {
+                    id: "primitive-color",
+                    name: "Primitive / Color",
+                    kind: "color",
+                    tokens: colorTokens
+                  }
+                ]
+              },
+              {
+                id: "semantics",
+                name: "Semantics",
+                defaultMode: "light",
+                modes: [
+                  { id: "light", name: "Light" },
+                  { id: "dark", name: "Dark" }
+                ],
+                groups: [
+                  {
+                    id: "semantic-color",
+                    name: "Semantic / Color",
+                    kind: "color",
+                    tokens: semanticTokens
+                  }
+                ]
+              }
+            ]
+          };
+
+          return {
+            document: documentDraft,
+            summary: buildAnalysisSummary(payload, imageAnalyses),
+            firstGroupId: "primitive-color",
+            firstTokenId: colorTokens[0] ? colorTokens[0].id : null
+          };
+        }
+
+        function buildAnalysisSummary(payload, imageAnalyses) {
+          var lightCount = imageAnalyses.filter(function (item) { return item.modeId === "light"; }).length;
+          var darkCount = imageAnalyses.filter(function (item) { return item.modeId === "dark"; }).length;
+
+          return {
+            selectionCount: payload.selection && payload.selection.count ? payload.selection.count : imageAnalyses.length,
+            imageCount: imageAnalyses.length,
+            lightCount: lightCount,
+            darkCount: darkCount
+          };
+        }
+
+        function buildModeColorValues(lightColor, darkColor) {
+          return {
+            light: createColorValue(lightColor),
+            dark: createColorValue(darkColor || lightColor)
+          };
+        }
+
+        function createColorToken(id, name, description, valuesByMode, source) {
+          return {
+            id: id,
+            name: name,
+            resolvedType: "COLOR",
+            status: "reviewed",
+            description: description,
+            valuesByMode: valuesByMode,
+            source: source
+          };
+        }
+
+        function createAliasToken(id, name, description, targetId, valuesByMode, source) {
+          return {
+            id: id,
+            name: name,
+            resolvedType: "COLOR",
+            status: "reviewed",
+            description: description,
+            aliasOf: { collectionId: "primitives", tokenId: targetId },
+            valuesByMode: valuesByMode,
+            source: source
+          };
+        }
+
+        function buildSourceMeta(origin, imageAnalyses, rawCandidates) {
+          var confidence = imageAnalyses.length ? 0.62 + Math.min(imageAnalyses.length, 6) * 0.05 : 0.62;
+
+          return {
+            origin: origin,
+            confidence: Number(Math.min(confidence, 0.92).toFixed(2)),
+            sampleCount: imageAnalyses.length,
+            rawCandidates: rawCandidates.slice(0, 6)
+          };
+        }
+
+        function collectRawCandidates(imageAnalyses, key) {
+          return imageAnalyses.map(function (image) {
+            return image[key] ? image[key].hex : null;
+          }).filter(Boolean);
+        }
+
+        function createColorValue(color) {
+          return {
+            type: "color",
+            hex: color.hex,
+            rgba: {
+              r: color.r,
+              g: color.g,
+              b: color.b,
+              a: color.a
+            }
+          };
+        }
+
+        function sampleImageColors(base64) {
+          var image = new Image();
+          var canvas = document.createElement("canvas");
+          var context = canvas.getContext("2d", { willReadFrequently: true });
+          var width;
+          var height;
+          var imageData;
+          var x;
+          var y;
+          var key;
+          var bucket;
+          var map = new Map();
+          var colors = [];
+          var sampleCount = 0;
+
+          image.src = "data:image/png;base64," + base64;
+
+          return waitForImage(image).then(function () {
+            width = Math.max(1, Math.min(image.width, 96));
+            height = Math.max(1, Math.min(image.height, 96));
+            canvas.width = width;
+            canvas.height = height;
+            context.drawImage(image, 0, 0, width, height);
+            imageData = context.getImageData(0, 0, width, height).data;
+
+            for (y = 0; y < height; y += 1) {
+              for (x = 0; x < width; x += 1) {
+                var offset = (y * width + x) * 4;
+                var alpha = imageData[offset + 3] / 255;
+
+                if (alpha < 0.9) {
+                  continue;
+                }
+
+                var red = quantizeChannel(imageData[offset]);
+                var green = quantizeChannel(imageData[offset + 1]);
+                var blue = quantizeChannel(imageData[offset + 2]);
+
+                key = red + "," + green + "," + blue;
+                bucket = map.get(key);
+                if (!bucket) {
+                  bucket = { r: red, g: green, b: blue, a: 1, count: 0 };
+                  map.set(key, bucket);
+                }
+
+                bucket.count += 1;
+                sampleCount += 1;
+              }
+            }
+
+            map.forEach(function (entry) {
+              colors.push(enrichColor(entry));
+            });
+
+            if (!colors.length) {
+              colors.push(enrichColor({ r: 245, g: 245, b: 245, a: 1, count: 1 }));
+            }
+
+            return {
+              sampleCount: sampleCount || 1,
+              colors: colors
+            };
+          });
+        }
+
+        function waitForImage(image) {
+          return new Promise(function (resolve, reject) {
+            image.onload = function () { resolve(); };
+            image.onerror = function () { reject(new Error("Failed to decode exported selection image.")); };
+          });
+        }
+
+        function quantizeChannel(value) {
+          return Math.max(0, Math.min(255, Math.round(value / 16) * 16));
+        }
+
+        function enrichColor(color) {
+          var hex = rgbToHex(color.r, color.g, color.b);
+          var hsl = rgbToHsl(color.r, color.g, color.b);
+
+          return {
+            r: Number((color.r / 255).toFixed(4)),
+            g: Number((color.g / 255).toFixed(4)),
+            b: Number((color.b / 255).toFixed(4)),
+            a: color.a,
+            red255: color.r,
+            green255: color.g,
+            blue255: color.b,
+            count: color.count,
+            hex: hex,
+            lightness: hsl.l,
+            saturation: hsl.s,
+            hue: hsl.h
+          };
+        }
+
+        function pickSurfaceColor(colors) {
+          var sorted = colors.slice().sort(function (left, right) {
+            return (right.count + brightnessWeight(right)) - (left.count + brightnessWeight(left));
+          });
+
+          return sorted[0] || colors[0];
+        }
+
+        function pickTextColor(colors, surface) {
+          var contrastSorted = colors.slice().sort(function (left, right) {
+            return contrastDistance(right, surface) - contrastDistance(left, surface);
+          });
+
+          return contrastSorted[0] || surface;
+        }
+
+        function pickAccentColor(colors, surface, text) {
+          var candidates = colors.filter(function (color) {
+            return color.saturation > 0.18 && color.hex !== surface.hex && color.hex !== text.hex;
+          });
+
+          if (!candidates.length) {
+            candidates = colors.filter(function (color) {
+              return color.hex !== surface.hex && color.hex !== text.hex;
+            });
+          }
+
+          candidates.sort(function (left, right) {
+            return (right.saturation * 100 + right.count) - (left.saturation * 100 + left.count);
+          });
+
+          return candidates[0] || text || surface;
+        }
+
+        function brightnessWeight(color) {
+          return color.lightness > 0.5 ? color.count * 0.15 : 0;
+        }
+
+        function contrastDistance(left, right) {
+          return Math.abs(left.lightness - right.lightness) + Math.abs(left.saturation - right.saturation) * 0.1;
+        }
+
+        function rgbToHex(red, green, blue) {
+          return "#" + [red, green, blue].map(function (value) {
+            var hex = value.toString(16).toUpperCase();
+            return hex.length === 1 ? "0" + hex : hex;
+          }).join("");
+        }
+
+        function rgbToHsl(red, green, blue) {
+          var r = red / 255;
+          var g = green / 255;
+          var b = blue / 255;
+          var max = Math.max(r, g, b);
+          var min = Math.min(r, g, b);
+          var h = 0;
+          var s = 0;
+          var l = (max + min) / 2;
+          var delta = max - min;
+
+          if (delta !== 0) {
+            s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+
+            if (max === r) {
+              h = (g - b) / delta + (g < b ? 6 : 0);
+            } else if (max === g) {
+              h = (b - r) / delta + 2;
+            } else {
+              h = (r - g) / delta + 4;
+            }
+
+            h /= 6;
+          }
+
+          return {
+            h: Number(h.toFixed(4)),
+            s: Number(s.toFixed(4)),
+            l: Number(l.toFixed(4))
+          };
+        }
+
         function getImportPlan() {
           if (!state.snapshot) {
             return null;
@@ -1050,19 +1761,26 @@
           var snapshot = state.snapshot;
           var plan = getImportPlan();
 
-          elements.editorType.textContent = snapshot ? snapshot.editorType : "loading";
-          elements.currentPage.textContent = snapshot ? snapshot.pageName : "Loading current page";
+          renderStaticText();
+          elements.editorType.textContent = snapshot ? snapshot.editorType : t("loading");
+          elements.currentPage.textContent = snapshot ? snapshot.pageName : t("loadingCurrentPage");
           elements.collectionCount.textContent = snapshot ? String(snapshot.collectionCount) : "—";
           elements.variableCount.textContent = snapshot ? String(countVariables(snapshot.collections)) : "—";
           elements.statusNote.textContent = state.error
             ? state.error
             : state.lastResult
-              ? "Last import: " + state.lastResult.stats.created + " created, " + state.lastResult.stats.updated + " updated, " + state.lastResult.stats.aliases + " alias bindings."
+              ? t("lastImport", {
+                  created: state.lastResult.stats.created,
+                  updated: state.lastResult.stats.updated,
+                  aliases: state.lastResult.stats.aliases
+                })
+              : state.analysisSummary
+                ? buildAnalysisStatusText()
               : state.lastAck
-                ? "Runtime event: " + state.lastAck
+                ? t("runtimeEvent", { event: formatAckLabel(state.lastAck) })
                 : snapshot
-                  ? "Current file snapshot loaded from figma.variables."
-                  : "Waiting for plugin main thread to return the current variable snapshot.";
+                  ? t("snapshotLoaded")
+                  : t("waitingSnapshot");
 
           renderStrategySwitch();
           renderGroupList();
@@ -1075,9 +1793,9 @@
 
         function renderStrategySwitch() {
           var strategies = [
-            ["skip-existing", "Skip Existing"],
-            ["rename-incoming", "Rename Incoming"],
-            ["replace-values", "Replace Values"]
+            ["skip-existing", t("strategySkip")],
+            ["rename-incoming", t("strategyRename")],
+            ["replace-values", t("strategyReplace")]
           ];
 
           elements.strategySwitch.innerHTML = "";
@@ -1119,7 +1837,7 @@
 
           if (activeGroup) {
             elements.reviewTitle.querySelector("strong").textContent = activeGroup.name;
-            elements.reviewSummary.textContent = activeGroup.summary;
+            elements.reviewSummary.textContent = buildReviewSummary(activeGroup.summary);
           }
         }
 
@@ -1140,7 +1858,7 @@
 
           elements.tokenTable.innerHTML =
             "<div class=\"token-row token-row-head\">" +
-            "<span>Name</span><span>Light</span><span>Dark</span><span>Review</span><span>Plan</span>" +
+            "<span>" + t("tableName") + "</span><span>" + t("tableLight") + "</span><span>" + t("tableDark") + "</span><span>" + t("tableReview") + "</span><span>" + t("tablePlan") + "</span>" +
             "</div>";
 
           tokens.forEach(function (token) {
@@ -1179,11 +1897,13 @@
             meta.textContent = token.description || "";
             nameCell.append(input, meta);
 
-            var lightCell = document.createElement("span");
-            lightCell.textContent = formatTokenValue(token.valuesByMode.light);
+            var lightCell = document.createElement("div");
+            lightCell.className = "token-value-cell";
+            renderTokenValue(lightCell, token.valuesByMode.light);
 
-            var darkCell = document.createElement("span");
-            darkCell.textContent = formatTokenValue(token.valuesByMode.dark);
+            var darkCell = document.createElement("div");
+            darkCell.className = "token-value-cell";
+            renderTokenValue(darkCell, token.valuesByMode.dark);
 
             var reviewCell = document.createElement("div");
             reviewCell.className = "review-actions";
@@ -1191,7 +1911,7 @@
             var removeButton = document.createElement("button");
             removeButton.type = "button";
             removeButton.className = "review-chip" + (removed ? " is-danger" : "");
-            removeButton.textContent = removed ? "Restore" : "Remove";
+            removeButton.textContent = removed ? t("restore") : t("remove");
             removeButton.addEventListener("click", function () {
               toggleRemoved(token.id);
               if (removed) {
@@ -1207,7 +1927,7 @@
               var aliasButton = document.createElement("button");
               aliasButton.type = "button";
               aliasButton.className = "review-chip" + (token.aliasOf ? " is-active" : "");
-              aliasButton.textContent = token.aliasOf ? "Alias On" : "Alias Off";
+              aliasButton.textContent = token.aliasOf ? t("aliasOn") : t("aliasOff");
               aliasButton.addEventListener("click", function () {
                 updateToken(token.id, function (draftToken) {
                   if (draftToken.aliasOf) {
@@ -1243,8 +1963,8 @@
           elements.signalList.innerHTML = "";
 
           if (!token) {
-            elements.selectedName.textContent = "Select a token";
-            elements.selectedMeta.textContent = "Choose a token row to inspect its current draft state.";
+            elements.selectedName.textContent = t("selectToken");
+            elements.selectedMeta.textContent = t("selectTokenMeta");
             return;
           }
 
@@ -1254,7 +1974,11 @@
           Object.keys(token.valuesByMode || {}).forEach(function (modeId) {
             var card = document.createElement("div");
             card.className = "mode-value-card";
-            card.innerHTML = "<strong>" + modeId + "</strong><span>" + formatTokenValue(token.valuesByMode[modeId]) + "</span>";
+            var title = document.createElement("strong");
+            var valueBox = document.createElement("span");
+            title.textContent = modeId;
+            renderTokenValue(valueBox, token.valuesByMode[modeId]);
+            card.append(title, valueBox);
             elements.modeValues.append(card);
           });
 
@@ -1263,24 +1987,24 @@
           }
 
           if (token.source && token.source.origin) {
-            lines.push("Origin: " + token.source.origin);
+            lines.push(t("sourceOrigin") + ": " + token.source.origin);
           }
           if (token.source && token.source.confidence) {
-            lines.push("Confidence: " + Math.round(token.source.confidence * 100) + "%");
+            lines.push(t("sourceConfidence") + ": " + Math.round(token.source.confidence * 100) + "%");
           }
           if (token.source && token.source.sampleCount) {
-            lines.push("Samples: " + token.source.sampleCount);
+            lines.push(t("sourceSamples") + ": " + token.source.sampleCount);
           }
           if (token.aliasOf) {
-            lines.push("Alias: " + token.aliasOf.collectionId + " -> " + ((reviewFlat.tokenMap.get(token.aliasOf.tokenId) || {}).name || token.aliasOf.tokenId));
+            lines.push(t("alias") + ": " + token.aliasOf.collectionId + " -> " + ((reviewFlat.tokenMap.get(token.aliasOf.tokenId) || {}).name || token.aliasOf.tokenId));
           } else if (token.collectionId === "semantics") {
-            lines.push("Alias: disabled");
+            lines.push(t("alias") + ": " + t("aliasDisabled"));
           }
           if (isRemoved(token.id)) {
-            lines.push("Review status: removed from current import draft");
+            lines.push(t("removedFromDraft"));
           }
           if (operation) {
-            lines.push("Import plan: " + formatOperationLabel(operation, token.id));
+            lines.push(t("importPlan") + ": " + formatOperationLabel(operation, token.id));
           }
 
           lines.forEach(function (line) {
@@ -1298,13 +2022,13 @@
           }
 
           [
-            ["Create Collections", plan.stats.createCollections],
-            ["Reuse Collections", plan.stats.reuseCollections],
-            ["Create Tokens", plan.stats.createTokens],
-            ["Update Tokens", plan.stats.updateTokens],
-            ["Skip Tokens", plan.stats.skipTokens],
-            ["Alias Bindings", plan.stats.aliasBindings],
-            ["Validation Errors", plan.stats.validationErrors]
+            [t("createCollections"), plan.stats.createCollections],
+            [t("reuseCollections"), plan.stats.reuseCollections],
+            [t("createTokens"), plan.stats.createTokens],
+            [t("updateTokens"), plan.stats.updateTokens],
+            [t("skipTokens"), plan.stats.skipTokens],
+            [t("aliasBindings"), plan.stats.aliasBindings],
+            [t("validationErrors"), plan.stats.validationErrors]
           ].forEach(function (entry) {
             var card = document.createElement("article");
             card.className = "stat-card";
@@ -1324,8 +2048,8 @@
             var card = document.createElement("article");
             card.className = "collection-card";
             card.innerHTML =
-              "<div class=\"collection-head\"><strong>" + collection.name + "</strong><span>" + collection.variables.length + " vars</span></div>" +
-              "<p>Modes: " + collection.modes.map(function (mode) { return mode.name; }).join(", ") + "</p>" +
+              "<div class=\"collection-head\"><strong>" + collection.name + "</strong><span>" + collection.variables.length + " " + t("varsShort") + "</span></div>" +
+              "<p>" + t("modes") + ": " + collection.modes.map(function (mode) { return mode.name; }).join(", ") + "</p>" +
               "<ul class=\"mini-list\">" +
               collection.variables.slice(0, 4).map(function (variable) {
                 return "<li>" + variable.name + " · " + variable.resolvedType + "</li>";
@@ -1350,9 +2074,9 @@
               plan.validationIssues.map(function (issue) {
                 return {
                   tokenName: issue.code,
-                  collection: "Validation",
+                  collection: t("validation"),
                   issue: issue.message,
-                  suggestion: issue.level === "error" ? "Resolve before import." : "Review before import."
+                  suggestion: issue.level === "error" ? t("resolveBeforeImport") : t("reviewBeforeImport")
                 };
               })
             );
@@ -1360,10 +2084,10 @@
           if (!messages.length) {
             elements.conflictList.innerHTML =
               "<article class=\"conflict-card\">" +
-              "<strong>No blockers</strong>" +
-              "<p>Current draft can be imported with the selected strategy.</p>" +
-              "<span>Planner</span>" +
-              "<small>Main thread import executor is ready.</small>" +
+              "<strong>" + t("noBlockers") + "</strong>" +
+              "<p>" + t("draftCanImport") + "</p>" +
+              "<span>" + t("planner") + "</span>" +
+              "<small>" + t("executorReady") + "</small>" +
               "</article>";
           } else {
             messages.forEach(function (conflict) {
@@ -1385,8 +2109,8 @@
               card.innerHTML =
                 "<strong>" + log.level.toUpperCase() + "</strong>" +
                 "<p>" + log.message + "</p>" +
-                "<span>Import Log</span>" +
-                "<small>Runtime executor output</small>";
+                "<span>" + t("importLog") + "</span>" +
+                "<small>" + t("executorOutput") + "</small>";
               elements.conflictList.append(card);
             });
           }
@@ -1409,6 +2133,24 @@
               };
             })
           };
+        }
+
+        function buildAnalysisStatusText() {
+          return t("draftSourceSelection", {
+            imageCount: state.analysisSummary.imageCount,
+            lightCount: state.analysisSummary.lightCount,
+            darkCount: state.analysisSummary.darkCount
+          });
+        }
+
+        function buildReviewSummary(baseSummary) {
+          if (state.draftOrigin !== "selection" || !state.analysisSummary) {
+            return baseSummary;
+          }
+
+          return baseSummary + " " + t("currentDraftFromSelection", {
+            imageCount: state.analysisSummary.imageCount
+          });
         }
 
         function getFirstVisibleTokenId(groupId) {
@@ -1454,13 +2196,142 @@
           return "—";
         }
 
+        function renderTokenValue(container, value) {
+          container.innerHTML = "";
+
+          if (value && value.type === "color") {
+            container.append(createColorPreview(value));
+            return;
+          }
+
+          container.textContent = formatTokenValue(value);
+        }
+
+        function createColorPreview(value) {
+          var wrap = document.createElement("span");
+          var swatch = document.createElement("span");
+          var fill = document.createElement("span");
+          var label = document.createElement("span");
+
+          wrap.className = "color-preview";
+          swatch.className = "color-swatch";
+          fill.className = "color-swatch-fill";
+          label.className = "color-label";
+
+          fill.style.background = buildColorCss(value);
+          label.textContent = value.hex || buildColorHexFromRgba(value.rgba);
+
+          swatch.append(fill);
+          wrap.append(swatch, label);
+
+          return wrap;
+        }
+
+        function buildColorCss(value) {
+          var rgba = value && value.rgba ? value.rgba : null;
+
+          if (!rgba) {
+            return "transparent";
+          }
+
+          return "rgba(" +
+            Math.round((rgba.r || 0) * 255) + ", " +
+            Math.round((rgba.g || 0) * 255) + ", " +
+            Math.round((rgba.b || 0) * 255) + ", " +
+            (typeof rgba.a === "number" ? rgba.a : 1) +
+            ")";
+        }
+
+        function buildColorHexFromRgba(rgba) {
+          if (!rgba) {
+            return "—";
+          }
+
+          return rgbToHex(
+            Math.round((rgba.r || 0) * 255),
+            Math.round((rgba.g || 0) * 255),
+            Math.round((rgba.b || 0) * 255)
+          );
+        }
+
         function formatOperationLabel(operation, tokenId) {
-          if (tokenId && isRemoved(tokenId)) return "Removed";
-          if (!operation) return "Pending";
-          if (operation.kind === "create-token") return "Create";
-          if (operation.kind === "update-token") return "Update";
-          if (operation.kind === "skip-token") return "Skip";
+          if (tokenId && isRemoved(tokenId)) return t("removed");
+          if (!operation) return t("pending");
+          if (operation.kind === "create-token") return t("create");
+          if (operation.kind === "update-token") return t("update");
+          if (operation.kind === "skip-token") return t("skip");
           return operation.kind;
+        }
+
+        function renderLanguageSwitch() {
+          var options = [["zh", "中文"], ["en", "EN"]];
+
+          elements.languageSwitch.innerHTML = "";
+          options.forEach(function (option) {
+            var value = option[0];
+            var label = option[1];
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = state.language === value ? "is-active" : "";
+            button.textContent = label;
+            button.addEventListener("click", function () {
+              if (state.language === value) {
+                return;
+              }
+              state.language = value;
+              parent.postMessage({ pluginMessage: { type: "token-lab/set-language", payload: { language: state.language } } }, "*");
+              renderLanguageSwitch();
+              render();
+            });
+            elements.languageSwitch.append(button);
+          });
+        }
+
+        function renderStaticText() {
+          elements.headerEyebrow.textContent = t("headerEyebrow");
+          elements.headerTitle.textContent = t("headerTitle");
+          elements.headerCopy.textContent = t("headerCopy");
+          elements.refreshButton.textContent = t("refreshButton");
+          elements.analyzeButton.textContent = t("analyzeButton");
+          elements.importButton.textContent = t("importButton");
+          elements.currentFileEyebrow.textContent = t("currentFileEyebrow");
+          elements.labelEditor.textContent = t("labelEditor");
+          elements.labelCurrentPage.textContent = t("labelCurrentPage");
+          elements.labelCollections.textContent = t("labelCollections");
+          elements.labelVariables.textContent = t("labelVariables");
+          elements.strategyEyebrow.textContent = t("strategyEyebrow");
+          elements.reviewEyebrow.textContent = t("reviewEyebrow");
+          elements.reviewCopy.textContent = t("reviewCopy");
+          elements.plannerEyebrow.textContent = t("plannerEyebrow");
+          elements.selectedTokenEyebrow.textContent = t("selectedTokenEyebrow");
+          elements.modeValuesEyebrow.textContent = t("modeValuesEyebrow");
+          elements.signalsEyebrow.textContent = t("signalsEyebrow");
+          elements.runtimeStatusEyebrow.textContent = t("runtimeStatusEyebrow");
+          elements.snapshotEyebrow.textContent = t("snapshotEyebrow");
+          elements.conflictsEyebrow.textContent = t("conflictsEyebrow");
+          renderLanguageSwitch();
+        }
+
+        function formatAckLabel(eventName) {
+          var map = {
+            "selection-analysis-requested-from-ui": t("selectionAnalysisRequested"),
+            "selection-analysis-processing": t("selectionAnalysisProcessing"),
+            "selection-analysis-complete": t("selectionAnalysisComplete"),
+            "refresh-requested-from-ui": t("refreshRequested"),
+            "import-requested-from-ui": t("importRequested")
+          };
+
+          return map[eventName] || eventName;
+        }
+
+        function t(key, params) {
+          var table = I18N[state.language] || I18N.en;
+          var fallback = I18N.en;
+          var template = table[key] || fallback[key] || key;
+
+          return template.replace(/\{(\w+)\}/g, function (_, name) {
+            return Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name]) : "";
+          });
         }
 
         init();
